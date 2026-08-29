@@ -500,7 +500,7 @@ function chipRow(el,entries,set,cls,onChange){
   }));
 }
 function countAvailable(key,isFood){
-  if(osmState!=='ok'||!osmData) return null;
+  if((osmState!=='ok'&&osmState!=='partial')||!osmData) return null;
   const arr=isFood?osmData.foods.filter(f=>f.kind===key):osmData.sights.filter(s=>s.cat===key);
   return arr.length||0;
 }
@@ -586,7 +586,7 @@ map.on('click',e=>{if(pickMode) openNearby(e.latlng,'이 근처에서 출발','�
 
 function nearbyCandidates(latlng){
   const pool=[...PLACES];
-  if(osmState==='ok'&&osmData) pool.push(...osmData.sights.map(s=>({name:s.name,region:CAT[s.cat].label,lat:s.lat,lng:s.lng})));
+  if((osmState==='ok'||osmState==='partial')&&osmData) pool.push(...osmData.sights.map(s=>({name:s.name,region:CAT[s.cat].label,lat:s.lat,lng:s.lng})));
   const list=pool.map(p=>({...p,d:metersBetween(p,latlng)})).sort((a,b)=>a.d-b.d);
   const dedup=[]; const seen=new Set();
   for(const p of list){ if(seen.has(p.name))continue; seen.add(p.name); dedup.push(p); if(dedup.length>=8)break; }
@@ -653,58 +653,109 @@ function setStart(p,fly){
    실제 OSM 장소 불러오기 (Overpass, 미러 순차 시도)
    ============================================================ */
 const OVERPASS=[
- 'https://overpass-api.de/api/interpreter',
  'https://overpass.kumi.systems/api/interpreter',
+ 'https://overpass-api.de/api/interpreter',
  'https://overpass.private.coffee/api/interpreter',
 ];
-function overpassQuery(lat,lng,R){
+// 서버 내부 timeout(초)보다 클라이언트 abort 타임아웃을 항상 더 길게 잡는다.
+// 앞서 겪은 문제: 쿼리는 서버에 30초를 줘놓고 fetch는 20초 만에 끊어버려서
+// 서버가 다 계산하기도 전에 매번 우리 쪽에서 먼저 포기하고 있었다.
+const OSM_SERVER_TIMEOUT_S = 22;
+const OSM_CLIENT_TIMEOUT_MS = (OSM_SERVER_TIMEOUT_S + 8) * 1000;
+
+// 무거운 카테고리(특히 개별 가로수 "tree")를 하나의 큰 쿼리에 몰아넣으면
+// 도심에서는 결과가 수천 건까지 나오며 서버가 오래 걸린다.
+// 볼거리/가게를 두 개의 가벼운 쿼리로 나눠 각각 병렬로 시도하고,
+// 하나가 실패해도 다른 하나는 살릴 수 있게 한다.
+function sightQuery(lat,lng,R){
   const A=`(around:${R},${lat},${lng})`;
-  return `[out:json][timeout:30];(
+  return `[out:json][timeout:${OSM_SERVER_TIMEOUT_S}];(
 nwr["name"]["leisure"~"^(park|garden|nature_reserve|playground|fitness_station|pitch|sports_centre|track)$"]${A};
 nwr["name"]["tourism"~"^(viewpoint|artwork|museum|gallery|attraction)$"]${A};
 nwr["name"]["historic"]${A};
 nwr["name"]["amenity"~"^(place_of_worship|library|marketplace|fountain|arts_centre)$"]${A};
-nwr["name"]["natural"~"^(water|beach|peak|wood|spring|tree|tree_row)$"]${A};
+nwr["name"]["natural"~"^(water|beach|peak|wood|spring)$"]${A};
 nwr["name"]["man_made"~"^(bridge|water_tower|lighthouse|tower)$"]${A};
+);out center 150;`;
+}
+function foodQuery(lat,lng,R){
+  const A=`(around:${R},${lat},${lng})`;
+  return `[out:json][timeout:${OSM_SERVER_TIMEOUT_S}];(
 nwr["name"]["amenity"~"^(cafe|restaurant|fast_food|bar|pub|ice_cream)$"]${A};
 nwr["name"]["shop"~"^(bakery|pastry|confectionery|convenience|books)$"]${A};
-);out center 400;`;
+);out center 150;`;
+}
+async function overpassFetch(query){
+  const body='data='+encodeURIComponent(query);
+  let lastErr='요청이 차단됐어요';
+  for(const url of OVERPASS){
+    try{
+      const ctrl=new AbortController(),t=setTimeout(()=>ctrl.abort(),OSM_CLIENT_TIMEOUT_MS);
+      const res=await fetch(url,{method:'POST',signal:ctrl.signal,
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},body});
+      clearTimeout(t);
+      if(!res.ok){lastErr=`서버 응답 ${res.status}`;continue}
+      const data=await res.json();
+      return {elements:data.elements||[]};
+    }catch(e){ lastErr = e.name==='AbortError' ? '응답이 너무 느려요' : '요청이 차단됐어요'; }
+  }
+  throw new Error(lastErr);
 }
 let osmTimer=null;
 function scheduleOsm(){ clearTimeout(osmTimer); osmTimer=setTimeout(loadOsm,500); }
+
+function elementsToSights(elements){
+  const out=[];
+  elements.forEach(e=>{
+    const lat=e.lat??e.center?.lat, lng=e.lon??e.center?.lon;
+    if(lat==null||lng==null||!e.tags||!e.tags.name) return;
+    const c=classify(e.tags); if(!c||c.type!=='sight') return;
+    out.push({id:'osm'+e.type+e.id,name:e.tags.name,lat,lng,source:'osm',type:'sight',
+      cat:c.cat,dwell:CAT[c.cat].dwell,note:osmNote(e.tags,c.cat)});
+  });
+  return out;
+}
+function elementsToFoods(elements){
+  const out=[];
+  elements.forEach(e=>{
+    const lat=e.lat??e.center?.lat, lng=e.lon??e.center?.lon;
+    if(lat==null||lng==null||!e.tags||!e.tags.name) return;
+    const c=classify(e.tags); if(!c||c.type!=='food') return;
+    out.push({id:'osm'+e.type+e.id,name:e.tags.name,lat,lng,source:'osm',type:'food',
+      kind:c.kind,cuisine:mapCuisine(e.tags.cuisine,c.kind),dwell:KIND[c.kind].dwell});
+  });
+  return out;
+}
 
 async function loadOsm(force){
   const R=Math.round(cfg.radiusKm*1000*1.2);
   const key=`${start.lat.toFixed(4)},${start.lng.toFixed(4)}:${R}`;
   if(!force&&osmKey===key&&osmState==='ok') return osmData;
   osmState='loading'; osmError=''; renderStatus();
-  const body='data='+encodeURIComponent(overpassQuery(start.lat,start.lng,R));
 
-  for(const url of OVERPASS){
-    try{
-      const ctrl=new AbortController(),t=setTimeout(()=>ctrl.abort(),20000);
-      const res=await fetch(url,{method:'POST',signal:ctrl.signal,
-        headers:{'Content-Type':'application/x-www-form-urlencoded'},body});
-      clearTimeout(t);
-      if(!res.ok){osmError=`서버 응답 ${res.status}`;continue}
-      const data=await res.json();
-      const sights=[],foods=[];
-      (data.elements||[]).forEach(e=>{
-        const lat=e.lat??e.center?.lat, lng=e.lon??e.center?.lon;
-        if(lat==null||lng==null||!e.tags||!e.tags.name) return;
-        const c=classify(e.tags); if(!c) return;
-        const base={id:'osm'+e.type+e.id,name:e.tags.name,lat,lng,source:'osm'};
-        if(c.type==='food') foods.push({...base,type:'food',kind:c.kind,
-          cuisine:mapCuisine(e.tags.cuisine,c.kind),dwell:KIND[c.kind].dwell});
-        else sights.push({...base,type:'sight',cat:c.cat,dwell:CAT[c.cat].dwell,
-          note:osmNote(e.tags,c.cat)});
-      });
-      if(!sights.length&&!foods.length){osmError='이 주변에 등록된 장소가 없어요';continue}
-      osmData={sights,foods}; osmKey=key; osmState='ok'; renderStatus(); refreshChips();
-      return osmData;
-    }catch(e){ osmError = e.name==='AbortError' ? '응답이 너무 느려요' : '요청이 차단됐어요'; }
+  const [sightRes, foodRes] = await Promise.allSettled([
+    overpassFetch(sightQuery(start.lat,start.lng,R)),
+    overpassFetch(foodQuery(start.lat,start.lng,R)),
+  ]);
+
+  const sights = sightRes.status==='fulfilled' ? elementsToSights(sightRes.value.elements) : [];
+  const foods  = foodRes.status==='fulfilled'  ? elementsToFoods(foodRes.value.elements)  : [];
+
+  if(sightRes.status==='rejected' && foodRes.status==='rejected'){
+    osmError = sightRes.reason.message || '요청이 차단됐어요';
+    osmState='fail'; renderStatus(); refreshChips(); return null;
   }
-  osmState='fail'; renderStatus(); refreshChips(); return null;
+  if(!sights.length && !foods.length){
+    osmError='이 주변에 등록된 장소가 없어요';
+    osmState='fail'; renderStatus(); refreshChips(); return null;
+  }
+
+  osmData={sights,foods}; osmKey=key;
+  osmState = (sightRes.status==='rejected' || foodRes.status==='rejected') ? 'partial' : 'ok';
+  osmError = sightRes.status==='rejected' ? `볼거리 조회 실패: ${sightRes.reason.message}`
+           : foodRes.status==='rejected' ? `가게 조회 실패: ${foodRes.reason.message}` : '';
+  renderStatus(); refreshChips();
+  return osmData;
 }
 function osmNote(t,cat){
   const bits=[];
@@ -750,12 +801,15 @@ function samples(){
   return sampleCache;
 }
 function pools(){
-  if(osmState==='ok'&&osmData){
+  if((osmState==='ok'||osmState==='partial')&&osmData){
     const s=samples();
-    // OSM에 없는 카테고리만 예시로 채운다
+    // OSM에 없는 카테고리만 예시로 채운다 (해당 카테고리 자체가 조회 안 됐을 수도 있음)
     const have=new Set(osmData.sights.map(x=>x.cat));
     const filler=s.sights.filter(x=>!have.has(x.cat));
-    return{sights:[...osmData.sights,...filler],foods:osmData.foods.length?osmData.foods:s.foods};
+    return{
+      sights: osmData.sights.length ? [...osmData.sights,...filler] : s.sights,
+      foods: osmData.foods.length ? osmData.foods : s.foods,
+    };
   }
   return samples();
 }
@@ -907,13 +961,14 @@ async function drawCourse(){
    ============================================================ */
 function renderStatus(){
   const el=document.getElementById('status');
-  const map_={idle:['#a3a3a3','장소 데이터 대기 중'],loading:['#B87514','실제 장소 불러오는 중…'],
+  const map_={idle:['#a3a3a3','장소 데이터 대기 중'],loading:['#B87514','실제 장소 불러오는 중… (최대 30초 정도 걸릴 수 있어요)'],
     ok:['#1F6F52',`실제 OSM 장소 ${osmData?osmData.sights.length+osmData.foods.length:0}곳`],
+    partial:['#B87514',`실제 장소 일부만 불러옴 (${osmData?osmData.sights.length+osmData.foods.length:0}곳)${osmError?` — ${osmError}`:''}`],
     fail:['#a3a3a3',`예시 장소 사용 중${osmError?` — ${osmError}`:''}`]};
-  const [color,text]=map_[osmState];
+  const [color,text]=map_[osmState]||map_.fail;
   const route=!course?'':` <span style="color:var(--hairline-strong)">|</span> 경로 ${course.routeSource==='osrm'?'실제 도보':'추정 직선'}`;
   el.innerHTML=`<span class="dot" style="background:${color}"></span><span>${text}${route}</span>`
-    +(osmState==='ok'?'':`<button class="mini" id="retryOsm">${osmState==='loading'?'불러오는 중':'다시 시도'}</button>`);
+    +(osmState==='ok'||osmState==='loading'?'':`<button class="mini" id="retryOsm">다시 시도</button>`);
   const r=document.getElementById('retryOsm');
   if(r) r.addEventListener('click',()=>loadOsm(true));
 }
