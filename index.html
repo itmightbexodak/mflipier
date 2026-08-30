@@ -2,37 +2,53 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>걸음뽑기 — 무작위 산책 코스</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700&family=IBM+Plex+Sans+KR:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
-  color-scheme:light dark;
+  color-scheme:light;
   --canvas:#ffffff; --surface-soft:#fafafa; --surface-dark:#171717;
   --ink:#0a0a0a; --charcoal:#525252; --body:#737373; --mute:#a3a3a3;
   --hairline:#e5e5e5; --hairline-strong:#d4d4d4;
   --on-dark:#ffffff; --on-dark-mute:rgba(255,255,255,.7);
   --primary:#1F6F52; --primary-active:#155A41; --food:#B87514; --warn:#B84A14; --alt:#8A8F98;
-  --start-pin:#C0452E;              /* 초록·오커와 같은 채도로 맞춘 벽돌빛 빨강 */
+  --start-pin:#C0452E;
+  --shadow:0 2px 12px rgba(0,0,0,.10);
   --focus-ring:rgba(31,111,82,.45);
-  --r-sm:6px; --r-md:8px; --r-lg:12px; --r-full:9999px;
+  --r-sm:6px; --r-md:8px; --r-lg:12px; --r-xl:20px; --r-full:9999px;
   --sp-sm:8px; --sp-md:12px; --sp-lg:16px; --sp-xl:24px; --sp-xxl:32px;
   --f-display:'Nunito','SF Pro Rounded',system-ui,sans-serif;
   --f-body:'IBM Plex Sans KR',ui-sans-serif,system-ui,-apple-system,sans-serif;
   --f-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  /* 시트 윗면 + 여유 간격 — 지도 위 요소들이 이 선을 기준으로 붙는다 */
+  --sheet-gap:12px;
+  --sheet-top:0px;
 }
+/* 다크 테마 — 시스템 설정을 따를 때는 data-theme 속성이 없다 */
 @media (prefers-color-scheme: dark){
-  :root{
+  :root:not([data-theme]){
+    color-scheme:dark;
     --canvas:#0F1211; --surface-soft:#171B19; --surface-dark:#EDF1EE;
     --ink:#F1F5F2; --charcoal:#C3CBC7; --body:#98A39E; --mute:#6C7671;
     --hairline:#272D2A; --hairline-strong:#38403C;
     --on-dark:#0F1211; --on-dark-mute:rgba(15,18,17,.66);
     --primary:#3AA87C; --primary-active:#4FC294; --food:#DCA146; --warn:#DE7A52; --alt:#79837E;
-    --start-pin:#DD6A52;
+    --start-pin:#DD6A52; --shadow:0 2px 14px rgba(0,0,0,.5);
     --focus-ring:rgba(58,168,124,.5);
   }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --canvas:#0F1211; --surface-soft:#171B19; --surface-dark:#EDF1EE;
+  --ink:#F1F5F2; --charcoal:#C3CBC7; --body:#98A39E; --mute:#6C7671;
+  --hairline:#272D2A; --hairline-strong:#38403C;
+  --on-dark:#0F1211; --on-dark-mute:rgba(15,18,17,.66);
+  --primary:#3AA87C; --primary-active:#4FC294; --food:#DCA146; --warn:#DE7A52; --alt:#79837E;
+  --start-pin:#DD6A52; --shadow:0 2px 14px rgba(0,0,0,.5);
+  --focus-ring:rgba(58,168,124,.5);
 }
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
@@ -41,24 +57,22 @@ button,input,textarea{font-family:inherit;color:inherit;font-size:inherit}
 button{cursor:pointer;border:0;background:none}
 :focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
 
+/* ============ 데스크톱 기본 ============ */
 #app{display:flex;height:100vh;min-height:600px;overflow:hidden}
 .panel{width:412px;flex:none;border-right:1px solid var(--hairline);display:flex;flex-direction:column;overflow:hidden}
-.panel-top{padding:18px 20px 14px;border-bottom:1px solid var(--hairline);background:var(--canvas)}
-.panel-scroll{overflow-y:auto;padding:20px 20px 8px;flex:1}
+.panel-top{padding:16px 20px 14px;border-bottom:1px solid var(--hairline);background:var(--canvas)}
+.sheet{overflow-y:auto;padding:20px 20px 8px;flex:1;display:flex;flex-direction:column}
+.sheet-grab,.sheet-head,.sheet-foot,.grabzone{display:none}
+.sheet-body{display:block}
 .mapwrap{flex:1;position:relative;min-height:360px}
-@media(max-width:880px){
-  #app{display:flex;flex-direction:column;height:auto;min-height:100vh;overflow:visible}
-  .panel{display:contents}
-  .panel-top{order:1;border-right:0;border-bottom:1px solid var(--hairline);position:sticky;top:0;z-index:600}
-  .mapwrap{order:2;height:52vh;min-height:320px;flex:none}
-  .panel-scroll{order:3;overflow:visible;max-height:none;padding-top:20px}
-}
 
-.brand{display:flex;align-items:center;gap:10px}
+/* 헤더는 없앴다 — 검색바가 그 역할을 겸한다 */
+.topbar{display:none}
+.brand{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
 .brand .wm{font-family:var(--f-display);font-weight:700;font-size:19px;letter-spacing:-.01em;line-height:1.1}
 .brand .wm small{display:block;font-family:var(--f-body);font-weight:400;font-size:10px;letter-spacing:.18em;color:var(--mute);margin-top:3px}
 
-.searchwrap{position:relative;margin-top:14px}
+.searchwrap{position:relative;margin-top:0}
 .searchbar{display:flex;align-items:center;gap:7px;height:44px;padding:0 6px 0 16px;background:var(--surface-soft);
   border:1px solid transparent;border-radius:var(--r-full);transition:.14s}
 .searchbar:focus-within{background:var(--canvas);border-color:var(--hairline-strong)}
@@ -66,20 +80,21 @@ button{cursor:pointer;border:0;background:none}
 .searchbar input::placeholder{color:var(--mute)}
 .icobtn{width:32px;height:32px;border-radius:var(--r-full);border:1px solid var(--hairline-strong);background:var(--canvas);
   display:flex;align-items:center;justify-content:center;flex:none;color:var(--ink);font-size:13px}
-.icobtn:hover{border-color:var(--primary)}
+
 .icobtn.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.icobtn.lg{width:40px;height:40px;font-size:15px}
 .suggest{position:absolute;left:0;right:0;top:calc(100% + 6px);background:var(--canvas);border:1px solid var(--hairline);
-  border-radius:var(--r-lg);overflow:hidden;z-index:700}
+  border-radius:var(--r-lg);overflow:hidden;z-index:900;box-shadow:var(--shadow)}
 .suggest button{display:block;width:100%;text-align:left;padding:11px 15px;border-bottom:1px solid var(--hairline)}
 .suggest button:last-child{border-bottom:0}
-.suggest button:hover{background:var(--surface-soft)}
+
 .suggest .nm{font-size:13.5px;font-weight:500}
 .suggest .rg{font-size:11px;color:var(--mute);margin-top:2px}
 
 .snippet{display:flex;align-items:center;gap:8px;min-height:48px;padding:12px 20px;background:var(--surface-soft);
   border-radius:var(--r-full);font-family:var(--f-mono);font-size:12.5px;line-height:1.5;margin-bottom:var(--sp-xl)}
 .snippet .dim{color:var(--mute)}
-.snippet i{color:var(--primary);font-size:12px}
+.snippet>i{color:var(--primary);font-size:12px;flex:none}
 
 .hero{text-align:center;padding:var(--sp-xl) 0 var(--sp-lg)}
 .hero h1{font-family:var(--f-display);font-weight:600;font-size:30px;line-height:1.2;margin:0 0 10px}
@@ -92,7 +107,7 @@ button{cursor:pointer;border:0;background:none}
 .chiprow{display:flex;flex-wrap:wrap;gap:7px}
 .chip{border:1px solid var(--hairline-strong);background:var(--canvas);color:var(--charcoal);border-radius:var(--r-full);
   padding:7px 13px;font-size:12.5px;font-weight:500;transition:.12s}
-.chip:hover{border-color:var(--primary);color:var(--ink)}
+
 .chip.on{background:var(--primary);border-color:var(--primary);color:#fff}
 .chip.food.on{background:var(--food);border-color:var(--food);color:#fff}
 .chip .n{font-family:var(--f-mono);font-size:10.5px;opacity:.62;margin-left:5px}
@@ -100,7 +115,7 @@ button{cursor:pointer;border:0;background:none}
 .pacerow{display:flex;gap:7px}
 .pacebtn{flex:1;border:1px solid var(--hairline-strong);background:var(--canvas);border-radius:var(--r-lg);
   padding:11px 6px;text-align:center;transition:.12s}
-.pacebtn:hover{border-color:var(--primary)}
+
 .pacebtn.on{background:var(--ink);border-color:var(--ink);color:var(--canvas)}
 .pacebtn strong{display:block;font-family:var(--f-display);font-weight:700;font-size:13px}
 .pacebtn span{display:block;font-size:10.5px;color:var(--mute);margin-top:3px}
@@ -109,9 +124,8 @@ button{cursor:pointer;border:0;background:none}
 .toggle{display:flex;align-items:center;gap:10px;width:100%;border:1px solid var(--hairline-strong);
   border-radius:var(--r-full);padding:10px 16px;margin-top:9px;font-size:12.5px;font-weight:500;
   color:var(--charcoal);background:var(--canvas);text-align:left}
-.toggle:hover{border-color:var(--primary)}
-.toggle .sw{flex:none;width:34px;height:20px;border-radius:var(--r-full);background:var(--hairline-strong);
-  position:relative;transition:.16s}
+
+.toggle .sw{flex:none;width:34px;height:20px;border-radius:var(--r-full);background:var(--hairline-strong);position:relative;transition:.16s}
 .toggle .sw::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:var(--r-full);
   background:var(--canvas);transition:.16s}
 .toggle.on{border-color:var(--primary);color:var(--ink)}
@@ -123,7 +137,7 @@ button{cursor:pointer;border:0;background:none}
 .numfield{display:flex;align-items:center;border:1px solid var(--hairline-strong);border-radius:var(--r-full);
   background:var(--canvas);overflow:hidden;height:42px;flex:1}
 .numfield button{width:40px;height:100%;color:var(--body);font-size:15px}
-.numfield button:hover{background:var(--surface-soft);color:var(--ink)}
+
 .numfield input{flex:1;min-width:0;border:0;outline:none;text-align:center;font-family:var(--f-mono);font-size:15px;
   background:none;-moz-appearance:textfield}
 .numfield input::-webkit-outer-spin-button,.numfield input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
@@ -149,13 +163,12 @@ input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:var(--r
 .btn{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;height:44px;border-radius:var(--r-full);
   font-size:14px;font-weight:600;transition:.14s}
 .btn-primary{background:var(--primary);color:#fff}
-.btn-primary:hover{background:var(--primary-active)}
+
 .btn-primary[disabled]{background:var(--surface-soft);color:var(--mute);cursor:progress}
 .btn-secondary{background:var(--canvas);color:var(--ink);border:1px solid var(--hairline-strong)}
-.btn-secondary:hover{border-color:var(--ink)}
+
 .btn-on-dark{background:var(--canvas);color:var(--ink);height:36px;padding:0 18px;width:auto;font-size:13px}
 .btn-ghost-dark{background:transparent;color:var(--on-dark);border:1px solid var(--on-dark-mute);height:36px;padding:0 18px;width:auto;font-size:13px}
-.btn-ghost-dark:hover{border-color:var(--on-dark)}
 .die{display:inline-block;font-size:15px}
 .rolling .die{animation:spin .55s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -165,8 +178,7 @@ input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:var(--r
 .routepick{display:flex;gap:7px;margin-bottom:var(--sp-lg)}
 .routebtn{flex:1;border:1px solid var(--hairline-strong);background:var(--canvas);border-radius:var(--r-lg);
   padding:10px 8px;text-align:left;transition:.12s}
-.routebtn:hover{border-color:var(--primary)}
-.routebtn.on{border-color:var(--primary);background:color-mix(in srgb, var(--primary) 8%, var(--canvas))}
+.routebtn.on{border-color:var(--primary)}
 .routebtn strong{display:block;font-family:var(--f-display);font-weight:700;font-size:12.5px;margin-bottom:3px}
 .routebtn span{display:block;font-family:var(--f-mono);font-size:10.5px;color:var(--body);line-height:1.5}
 
@@ -185,12 +197,11 @@ input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:var(--r
 .card.dragover{border-top:2px solid var(--primary)}
 .chead{display:flex;gap:10px;align-items:flex-start;width:100%;text-align:left}
 .grip{flex:none;width:20px;padding-top:5px;color:var(--hairline-strong);cursor:grab;font-size:12px}
-.grip:hover{color:var(--body)}
+
 .card.anchor .chead{gap:12px}
 .num{flex:none;width:26px;height:26px;border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;
   font-family:var(--f-mono);font-size:12px;font-weight:500;color:#fff;margin-top:1px}
-.pinicon{flex:none;width:26px;display:flex;align-items:center;justify-content:center;font-size:19px;margin-top:1px;
-  color:var(--start-pin)}
+.pinicon{flex:none;width:26px;display:flex;align-items:center;justify-content:center;font-size:19px;margin-top:1px;color:var(--start-pin)}
 .cbody{flex:1;text-align:left}
 .cname{font-family:var(--f-display);font-weight:700;font-size:15px;line-height:1.3;display:block}
 .cmeta{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;font-family:var(--f-mono);font-size:11px;color:var(--mute)}
@@ -206,19 +217,17 @@ input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:var(--r
 .acts{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}
 .mini{border:1px solid var(--hairline-strong);border-radius:var(--r-full);padding:7px 14px;font-size:12.5px;
   font-weight:500;color:var(--charcoal);background:var(--canvas);display:inline-block}
-.mini:hover{border-color:var(--ink);color:var(--ink)}
-.mini.danger:hover{border-color:var(--warn);color:var(--warn)}
+
+
 .mini[disabled]{opacity:.4;cursor:default}
 .addrow{display:flex;justify-content:center;padding:10px 0}
-.addbtn{border:1px dashed var(--hairline-strong);border-radius:var(--r-full);padding:8px 16px;font-size:12px;
-  color:var(--body);background:var(--canvas)}
-.addbtn:hover{border-color:var(--primary);color:var(--primary)}
+.addbtn{border:1px dashed var(--hairline-strong);border-radius:var(--r-full);padding:8px 16px;font-size:12px;color:var(--body);background:var(--canvas)}
+
 textarea{width:100%;border:1px solid var(--hairline);border-radius:var(--r-lg);background:var(--canvas);padding:11px 14px;
   font-size:13.5px;resize:vertical;min-height:62px;margin-top:10px;outline:none}
 textarea:focus{border-color:var(--ink)}
 .thumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
 .thumbs img{width:54px;height:54px;object-fit:cover;border:1px solid var(--hairline);border-radius:var(--r-md)}
-.empty{border:1px solid var(--hairline);border-radius:var(--r-lg);padding:var(--sp-xl);text-align:center;color:var(--body);font-size:13.5px;line-height:1.6}
 
 .status{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:var(--sp-xl);padding:12px 16px;
   border:1px solid var(--hairline);border-radius:var(--r-lg);font-family:var(--f-mono);font-size:11.5px;color:var(--body)}
@@ -228,34 +237,35 @@ textarea:focus{border-color:var(--ink)}
 .foot a{color:var(--body)}
 
 #map{position:absolute;inset:0;background:var(--surface-soft)}
-.leaflet-container{font-family:var(--f-body);background:var(--surface-soft)}
+.leaflet-container{font-family:var(--f-body);background:#eef1ec}
 .floatbtn{position:absolute;right:16px;width:44px;height:44px;border-radius:var(--r-full);background:var(--canvas);
   border:1px solid var(--hairline-strong);display:flex;align-items:center;justify-content:center;z-index:400;
-  color:var(--ink);font-size:16px}
-.floatbtn:hover{border-color:var(--primary)}
+  color:var(--ink);font-size:16px;box-shadow:var(--shadow)}
+
 .floatbtn.on{background:var(--primary);border-color:var(--primary);color:#fff}
 #gpsBtn{bottom:226px} #locateBtn{bottom:170px} #addSpotBtn{bottom:114px}
-@media(max-width:880px){#gpsBtn{bottom:206px}#locateBtn{bottom:154px}#addSpotBtn{bottom:102px}}
 .leaflet-control-zoom{border:0!important;margin:0 16px 16px 0!important}
 .leaflet-control-zoom a{width:44px!important;height:44px!important;line-height:42px!important;background:var(--canvas)!important;
   border:1px solid var(--hairline-strong)!important;color:var(--ink)!important;font-size:19px!important}
 .leaflet-bar a:first-child{border-radius:var(--r-md) var(--r-md) 0 0!important}
 .leaflet-bar a:last-child{border-radius:0 0 var(--r-md) var(--r-md)!important;border-top:0!important}
-.leaflet-control-attribution{background:var(--canvas)!important;color:var(--mute)!important}
-.leaflet-control-attribution a{color:var(--body)!important}
-.pin{width:100%;height:100%;border-radius:var(--r-full);border:2.5px solid var(--canvas);display:flex;align-items:center;
+.leaflet-control-attribution{background:var(--canvas)!important;color:var(--mute)!important;
+  border-radius:var(--r-full)!important;padding:2px 10px!important;font-size:10px!important;
+  border:1px solid var(--hairline)!important;box-shadow:var(--shadow);margin:0 12px 12px 0!important}
+.leaflet-control-attribution a{color:var(--charcoal)!important}
+.pin{width:100%;height:100%;border-radius:var(--r-full);border:2.5px solid #fff;display:flex;align-items:center;
   justify-content:center;font-family:var(--f-mono);font-size:12px;font-weight:600;color:#fff}
 .mappin{display:flex;align-items:flex-end;justify-content:center;width:100%;height:100%;font-size:34px;
   filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))}
 .arrow{display:flex;align-items:center;justify-content:center;width:100%;height:100%}
-.leaflet-popup-content-wrapper{border-radius:var(--r-lg);border:1px solid var(--hairline);box-shadow:none;
+.leaflet-popup-content-wrapper{border-radius:var(--r-lg);border:1px solid var(--hairline);box-shadow:var(--shadow);
   background:var(--canvas);color:var(--ink)}
 .leaflet-popup-content{font-family:var(--f-body);font-size:13px;margin:11px 14px}
 .leaflet-popup-tip{display:none}
 .leaflet-tooltip{background:var(--canvas);color:var(--ink);border:1px solid var(--hairline);box-shadow:none}
 
 .nearby{position:absolute;left:16px;bottom:16px;width:300px;max-width:calc(100% - 32px);background:var(--canvas);
-  border:1px solid var(--hairline);border-radius:var(--r-lg);padding:var(--sp-lg);z-index:450;display:none}
+  border:1px solid var(--hairline);border-radius:var(--r-lg);padding:var(--sp-lg);z-index:450;display:none;box-shadow:var(--shadow)}
 .nearby.show{display:block}
 .nearby h3{font-family:var(--f-display);font-weight:700;font-size:14px;margin:0 0 3px}
 .nearby .hintline{font-size:12px;color:var(--body);margin:0 0 12px;line-height:1.5}
@@ -263,114 +273,306 @@ textarea:focus{border-color:var(--ink)}
 .nearby li button{display:flex;justify-content:space-between;align-items:baseline;gap:10px;width:100%;text-align:left;
   padding:9px 0;border-bottom:1px solid var(--hairline);font-size:13px}
 .nearby li:last-child button{border-bottom:0}
-.nearby li button:hover .nm{color:var(--primary)}
 .nearby .nm{font-weight:500}
 .nearby .rg{font-size:11px;color:var(--mute)}
 .nearby .dd{font-family:var(--f-mono);font-size:11px;color:var(--mute);flex:none}
 .nearby .row2{display:flex;gap:7px}
 .nearby .row2 .mini{flex:1;text-align:center}
 .toast{position:absolute;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--canvas);
-  padding:10px 18px;border-radius:var(--r-full);font-size:13px;z-index:500;opacity:0;transition:opacity .25s;pointer-events:none;max-width:80%}
+  padding:10px 18px;border-radius:var(--r-full);font-size:13px;z-index:800;opacity:0;transition:opacity .25s;pointer-events:none;max-width:80%}
 .toast.show{opacity:1}
+
+/* ============ 설정 모달 ============ */
+.modal{position:fixed;inset:0;z-index:1000;display:none;align-items:center;justify-content:center;padding:20px;
+  background:rgba(0,0,0,.4)}
+.modal.show{display:flex}
+.modal-card{background:var(--canvas);border:1px solid var(--hairline);border-radius:var(--r-xl);width:100%;max-width:440px;
+  max-height:86vh;overflow-y:auto;padding:var(--sp-xl);box-shadow:var(--shadow)}
+.modal-card h2{font-family:var(--f-display);font-weight:700;font-size:18px;margin:0}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--sp-xl)}
+.modal-sec{margin-bottom:var(--sp-xl)}
+.modal-sec h3{font-size:12px;color:var(--body);font-weight:500;margin:0 0 10px}
+.presetlist{list-style:none;margin:0 0 12px;padding:0}
+.presetlist li{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--hairline)}
+.presetlist .pname{flex:1;font-size:13.5px;font-weight:500}
+.presetlist .pitems{display:block;font-size:11px;color:var(--mute);font-weight:400;margin-top:2px}
+.presetform{display:flex;gap:7px}
+.presetform input{flex:1;min-width:0;border:1px solid var(--hairline-strong);border-radius:var(--r-full);
+  padding:0 16px;height:40px;background:var(--canvas);outline:none;font-size:13px}
+.presetform input:focus{border-color:var(--primary)}
+.emptyline{font-size:12.5px;color:var(--mute);padding:10px 0 14px}
+
+/* 히어로 로고 */
+.herologo{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:var(--sp-lg)}
+.herologo .mark{display:flex;align-items:center;gap:8px}
+.herologo .mark span{font-family:var(--f-display);font-weight:700;font-size:20px;letter-spacing:-.01em}
+.herologo .sub{font-size:10px;letter-spacing:.22em;color:var(--mute)}
+
+/* 단계 전환 애니메이션 */
+.step-next{animation:stepNext .26s cubic-bezier(.22,.9,.3,1)}
+.step-prev{animation:stepPrev .26s cubic-bezier(.22,.9,.3,1)}
+@keyframes stepNext{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
+@keyframes stepPrev{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.step-next,.step-prev{animation:none}}
+
+/* 사전 설정 만들기 */
+.presetdraft{border:1px solid var(--hairline);border-radius:var(--r-lg);padding:var(--sp-lg);margin-top:var(--sp-md)}
+.presetdraft .lab{margin-bottom:10px}
+
+/* 코스 지표 — 지도 위에 뜨는 박스. 다른 곳을 누르면 작아진다 */
+.metricfloat{position:absolute;left:50%;transform:translateX(-50%);top:16px;z-index:420;display:none;
+  flex-direction:column;width:calc(100% - 24px);max-width:420px;
+  background:var(--surface-dark);color:var(--on-dark);
+  border-radius:18px;padding:16px 20px;box-shadow:0 6px 22px rgba(0,0,0,.28);cursor:pointer;
+  transition:padding .24s cubic-bezier(.22,.9,.3,1),border-radius .24s cubic-bezier(.22,.9,.3,1),
+             width .24s cubic-bezier(.22,.9,.3,1),max-width .24s cubic-bezier(.22,.9,.3,1)}
+.metricfloat.show{display:flex}
+.metricfloat .mrow{display:flex;align-items:center;justify-content:center;gap:var(--sp-xl);white-space:nowrap;
+  transition:gap .24s cubic-bezier(.22,.9,.3,1)}
+.metricfloat .mrow>div{text-align:center}
+.metricfloat .mlabel{display:block;font-size:11px;color:var(--on-dark-mute);margin-bottom:4px;
+  max-height:20px;overflow:hidden;transition:max-height .2s ease,opacity .16s ease,margin .2s ease}
+.metricfloat b{font-family:var(--f-mono);font-size:22px;font-weight:500;
+  transition:font-size .24s cubic-bezier(.22,.9,.3,1)}
+.metricfloat .sepr{width:1px;height:30px;background:var(--on-dark-mute);opacity:.35;padding:0;
+  transition:height .24s cubic-bezier(.22,.9,.3,1)}
+.metricfloat .mdetail{margin-top:14px;padding-top:14px;overflow:hidden;
+  border-top:1px solid color-mix(in srgb, var(--on-dark) 22%, transparent);
+  max-height:340px;opacity:1;
+  transition:max-height .26s cubic-bezier(.22,.9,.3,1),opacity .2s ease,
+             margin-top .26s cubic-bezier(.22,.9,.3,1),padding-top .26s cubic-bezier(.22,.9,.3,1)}
+.metricfloat .mdetail p{margin:0 0 12px;font-size:13.5px;line-height:1.5;color:var(--on-dark-mute)}
+.metricfloat .darkacts{margin-top:12px}
+/* 접힌 상태 — 알약이 되지만 곡률은 이어서 변한다 */
+.metricfloat.compact{width:auto;max-width:none;padding:8px 16px;border-radius:17px}
+.metricfloat.compact .mrow{gap:10px}
+.metricfloat.compact .mlabel{max-height:0;opacity:0;margin-bottom:0}
+.metricfloat.compact b{font-size:13px}
+.metricfloat.compact .sepr{height:12px}
+.metricfloat.compact .mdetail{max-height:0;opacity:0;margin-top:0;padding-top:0;border-top-color:transparent}
+@media(prefers-reduced-motion:reduce){.metricfloat,.metricfloat *{transition:none}}
+
+/* ============ 모바일: 지도 배경 + 플로팅 UI ============ */
+@media(max-width:880px){
+  html,body{overflow:hidden;height:100%}
+  #app{display:block;height:100dvh}
+  .panel{display:contents}
+  .mapwrap{position:fixed;inset:0;min-height:0}
+  .panel-top{position:fixed;top:0;left:0;right:0;z-index:700;padding:calc(10px + env(safe-area-inset-top)) 12px 10px;
+    border:0;background:transparent;pointer-events:none}
+  .searchwrap{pointer-events:auto;margin-top:0}
+  .searchbar{background:var(--canvas);box-shadow:var(--shadow);border-color:var(--hairline)}
+  .metricfloat{top:calc(env(safe-area-inset-top) + 68px)}
+
+  /* 모바일에서는 모든 UI가 지도 위에 떠 있다 */
+  .sheet{position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:750;
+    background:var(--canvas);border:1px solid var(--hairline);border-radius:var(--r-xl);
+    box-shadow:0 10px 34px rgba(0,0,0,.22);padding:0;overflow:hidden;
+    display:flex;flex-direction:column;max-height:84dvh;
+    transition:background .2s ease,box-shadow .2s ease,border-color .2s ease}
+  .sheet.dragging{transition:none}
+  .sheet-grab{display:block;width:44px;height:5px;border-radius:3px;background:var(--hairline-strong);
+    margin:0 auto;flex:none;position:relative}
+  .grabzone{display:block;padding:10px 0 6px;flex:none;touch-action:none;cursor:grab}
+  .grabzone:active{cursor:grabbing}
+  .sheet-head{display:flex;align-items:center;gap:10px;padding:2px 18px 8px;flex:none}
+  .sheet-head .stitle{flex:1;font-family:var(--f-display);font-weight:700;font-size:15px}
+  .stepdots{display:flex;gap:5px}
+  .stepdots i{width:6px;height:6px;border-radius:var(--r-full);background:var(--hairline-strong);display:block}
+  .stepdots i.on{background:var(--primary);width:16px}
+  .sheet .snippet{margin:0 18px 12px;min-height:40px;padding:9px 16px;font-size:11.5px}
+  .sheet-body{flex:1;overflow-y:auto;padding:0 18px;-webkit-overflow-scrolling:touch}
+  .sheet-foot{display:flex;gap:8px;padding:12px 18px calc(14px + env(safe-area-inset-bottom));
+    border-top:1px solid var(--hairline);flex:none}
+  .sheet-foot .btn{height:46px}
+  .sheet.collapsed .sheet-body,.sheet.collapsed .sheet-foot{display:none}
+  .sheet.collapsed .snippet{margin-bottom:calc(10px + env(safe-area-inset-bottom))}
+
+  .sec{margin-bottom:var(--sp-lg)}
+  .hero{padding:var(--sp-sm) 0 var(--sp-lg)}
+  .hero h1{font-size:24px}
+  #rollBtn{display:none}
+  .foot{padding-bottom:var(--sp-lg)}
+  .results{margin-top:var(--sp-sm)}
+
+  .floatbtn{bottom:auto;top:auto;right:12px}
+  .leaflet-control-zoom{display:none!important}
+  /* 시트 윗면을 기준선으로 삼아 지도 위 요소가 함께 따라 움직인다.
+     워터마크는 버튼들보다 낮은 자리(맨 아래)에 둔다. */
+  #gpsBtn{bottom:calc(var(--sheet-top) + 178px)}
+  #locateBtn{bottom:calc(var(--sheet-top) + 122px)}
+  #addSpotBtn{bottom:calc(var(--sheet-top) + 66px)}
+  .floatbtn{transition:bottom .22s cubic-bezier(.22,.9,.3,1)}
+  .leaflet-bottom.leaflet-right{bottom:var(--sheet-top);
+    transition:bottom .22s cubic-bezier(.22,.9,.3,1)}
+  .leaflet-control-attribution{margin:0 12px 0 0!important;border-radius:var(--r-full)!important;
+    padding:2px 10px!important;font-size:10px!important}
+  .nearby{left:12px;right:12px;width:auto;max-width:none;bottom:var(--sheet-top);
+    transition:bottom .22s cubic-bezier(.22,.9,.3,1)}
+  .toast{bottom:calc(var(--sheet-top) + 56px);transition:bottom .22s cubic-bezier(.22,.9,.3,1),opacity .25s}
+  /* 손잡이를 끄는 동안에는 즉시 따라붙게 */
+  body.sheet-dragging .floatbtn,
+  body.sheet-dragging .leaflet-bottom.leaflet-right,
+  body.sheet-dragging .nearby,
+  body.sheet-dragging .toast{transition:none}
+  .detail{padding-left:38px}
+  /* 요약은 지도 위 지표 박스로 통합했다 */
+  .sheet .summary-dark{display:none}
+  .dragnote{display:none}
+  /* 설정은 전체화면 */
+  .modal{align-items:stretch;padding:0;background:var(--canvas)}
+  .modal-card{border:0;border-radius:0;max-width:none;max-height:none;width:100%;height:100dvh;
+    box-shadow:none;overflow-y:auto;
+    padding:calc(var(--sp-lg) + env(safe-area-inset-top)) var(--sp-lg) calc(var(--sp-xxl) + env(safe-area-inset-bottom))}
+  .modal-head{position:sticky;top:calc(-1 * var(--sp-lg));background:var(--canvas);
+    padding:var(--sp-sm) 0 var(--sp-lg);margin-bottom:var(--sp-lg);z-index:2}
+  .modal-card h2{font-size:20px}
+}
+
+/* 터치에서는 :hover가 탭 이후에도 눌어붙어 보이는 문제가 있어, 실제 마우스 포인터가 있을 때만 적용한다 */
+@media(hover:hover) and (pointer:fine){
+.icobtn:hover{border-color:var(--primary)}
+.suggest button:hover{background:var(--surface-soft)}
+.chip:hover{border-color:var(--primary);color:var(--ink)}
+.pacebtn:hover{border-color:var(--primary)}
+.toggle:hover{border-color:var(--primary)}
+.numfield button:hover{background:var(--surface-soft);color:var(--ink)}
+.btn-primary:hover{background:var(--primary-active)}
+.btn-secondary:hover{border-color:var(--ink)}
+.grip:hover{color:var(--body)}
+.mini:hover{border-color:var(--ink);color:var(--ink)}
+.mini.danger:hover{border-color:var(--warn);color:var(--warn)}
+.addbtn:hover{border-color:var(--primary);color:var(--primary)}
+.floatbtn:hover{border-color:var(--primary)}
+}
 </style>
 </head>
 <body>
 <div id="app">
   <aside class="panel">
     <div class="panel-top">
-      <div class="brand">
-        <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
-          <path d="M9.5 24.5c-1.6 0-2.6-1.2-2.6-2.8 0-2 1.4-3.6 1.4-5.4 0-1.3-.7-2.1-.7-3.4 0-1.9 1.5-3.4 3.4-3.4 1.8 0 3.1 1.4 3.1 3.3 0 2-1.3 3.4-1.3 5.2 0 1.2.6 1.9.6 3.1 0 1.9-1.5 3.4-3.9 3.4Z" fill="#1F6F52"/>
-          <path d="M21.5 21c-1.6 0-2.6-1.2-2.6-2.8 0-2 1.4-3.6 1.4-5.4 0-1.3-.7-2.1-.7-3.4 0-1.9 1.5-3.4 3.4-3.4 1.8 0 3.1 1.4 3.1 3.3 0 2-1.3 3.4-1.3 5.2 0 1.2.6 1.9.6 3.1 0 1.9-1.5 3.4-3.9 3.4Z" fill="#B87514"/>
-        </svg>
-        <div class="wm">걸음뽑기<small>RANDOM WALK</small></div>
+      <div class="topbar">
+        <div class="brand">
+          <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
+            <path d="M9.5 24.5c-1.6 0-2.6-1.2-2.6-2.8 0-2 1.4-3.6 1.4-5.4 0-1.3-.7-2.1-.7-3.4 0-1.9 1.5-3.4 3.4-3.4 1.8 0 3.1 1.4 3.1 3.3 0 2-1.3 3.4-1.3 5.2 0 1.2.6 1.9.6 3.1 0 1.9-1.5 3.4-3.9 3.4Z" fill="#1F6F52"/>
+            <path d="M21.5 21c-1.6 0-2.6-1.2-2.6-2.8 0-2 1.4-3.6 1.4-5.4 0-1.3-.7-2.1-.7-3.4 0-1.9 1.5-3.4 3.4-3.4 1.8 0 3.1 1.4 3.1 3.3 0 2-1.3 3.4-1.3 5.2 0 1.2.6 1.9.6 3.1 0 1.9-1.5 3.4-3.9 3.4Z" fill="#B87514"/>
+          </svg>
+          <div class="wm">걸음뽑기<small>RANDOM WALK</small></div>
+        </div>
+        <button class="icobtn lg" id="settingsBtn" title="설정"><i class="fa-solid fa-sliders"></i></button>
       </div>
       <div class="searchwrap">
         <div class="searchbar">
           <i class="fa-solid fa-magnifying-glass" style="color:var(--mute);font-size:13px"></i>
           <input id="q" type="text" placeholder="출발지 검색" autocomplete="off" />
           <button class="icobtn" id="gpsBtnPanel" title="현재 위치에서 출발"><i class="fa-solid fa-crosshairs"></i></button>
-          <button class="icobtn" id="pinBtn" title="지도에서 고르기" aria-pressed="false"><i class="fa-solid fa-location-dot"></i></button>
+          <button class="icobtn" id="pinBtn" title="지도에서 고르기"><i class="fa-solid fa-location-dot"></i></button>
+          <button class="icobtn" id="settingsBtnM" title="설정"><i class="fa-solid fa-sliders"></i></button>
         </div>
         <div class="suggest" id="suggest" style="display:none"></div>
       </div>
     </div>
 
-    <div class="panel-scroll">
+    <div class="sheet" id="sheet">
+      <div class="grabzone" id="grabZone"><div class="sheet-grab" id="sheetGrab"></div></div>
+      <div class="sheet-head">
+        <span class="stitle" id="stepTitle">어떻게 걸을까요?</span>
+        <span class="stepdots" id="stepDots"></span>
+        <button class="icobtn" id="sheetToggle" title="접기"><i class="fa-solid fa-chevron-down"></i></button>
+      </div>
       <div class="snippet" id="snippet"></div>
 
-      <div id="heroBlock" class="hero">
-        <h1>오늘은 어디로 걸을까요?</h1>
-        <p>출발지에서 시작해 다시 출발지로 돌아오는<br/>순환 코스를 여러 개 뽑아 드려요.</p>
-      </div>
-
-      <div class="sec">
-        <div class="lab"><span>어떻게 걸을까요</span></div>
-        <div class="pacerow" id="paceRow"></div>
-        <button class="toggle on" id="noBackBtn" aria-pressed="true">
-          <span class="sw"></span>
-          <span>왔던 길 되돌아가지 않기<small>한 방향으로 크게 돌아 출발지로 옵니다</small></span>
-        </button>
-      </div>
-
-      <div class="sec">
-        <div class="lab"><span>중간에 들를 스팟 수</span><b id="countOut">자동</b></div>
-        <div class="countwrap">
-          <div class="numfield">
-            <button id="cntMinus" title="줄이기"><i class="fa-solid fa-minus"></i></button>
-            <input type="number" id="cntInput" min="1" max="12" step="1" placeholder="자동" aria-label="스팟 수" />
-            <button id="cntPlus" title="늘리기"><i class="fa-solid fa-plus"></i></button>
+      <div class="sheet-body" id="sheetBody">
+        <div class="hero" data-step="1" id="heroBlock">
+          <div class="herologo">
+            <div class="mark">
+              <svg width="34" height="34" viewBox="0 0 32 32" fill="none">
+                <path d="M9.5 24.5c-1.6 0-2.6-1.2-2.6-2.8 0-2 1.4-3.6 1.4-5.4 0-1.3-.7-2.1-.7-3.4 0-1.9 1.5-3.4 3.4-3.4 1.8 0 3.1 1.4 3.1 3.3 0 2-1.3 3.4-1.3 5.2 0 1.2.6 1.9.6 3.1 0 1.9-1.5 3.4-3.9 3.4Z" fill="#1F6F52"/>
+                <path d="M21.5 21c-1.6 0-2.6-1.2-2.6-2.8 0-2 1.4-3.6 1.4-5.4 0-1.3-.7-2.1-.7-3.4 0-1.9 1.5-3.4 3.4-3.4 1.8 0 3.1 1.4 3.1 3.3 0 2-1.3 3.4-1.3 5.2 0 1.2.6 1.9.6 3.1 0 1.9-1.5 3.4-3.9 3.4Z" fill="#B87514"/>
+              </svg>
+              <span>걸음뽑기</span>
+            </div>
+            <div class="sub">RANDOM WALK</div>
           </div>
-          <button class="autobtn on" id="cntAuto">자동</button>
+          <h1>오늘은 어디로 걸을까요?</h1>
+          <p>출발지에서 시작해 다시 출발지로 돌아오는<br/>순환 코스를 여러 개 뽑아 드려요.</p>
         </div>
-      </div>
 
-      <div class="sec">
-        <div class="lab"><span>보고 싶은 것</span><button class="link" id="clearInterests">모두 해제</button></div>
-        <div class="chiprow" id="interestChips"></div>
-      </div>
+        <div class="sec" data-step="1">
+          <div class="lab"><span>걷는 방식</span></div>
+          <div class="pacerow" id="paceRow"></div>
+          <button class="toggle on" id="noBackBtn" aria-pressed="true">
+            <span class="sw"></span>
+            <span>왔던 길 되돌아가지 않기<small>한 방향으로 크게 돌아 출발지로 옵니다</small></span>
+          </button>
+        </div>
 
-      <div class="sec">
-        <div class="lab"><span>걷고 싶은 시간</span><b id="minOut">1시간 30분</b></div>
-        <input type="range" id="minutes" min="20" max="240" step="10" value="90" aria-label="걷고 싶은 시간" />
-        <div class="ticks"><span>20분</span><span>4시간</span></div>
-      </div>
-
-      <div class="sec">
-        <div class="lab"><span>출발지에서 벗어날 범위</span><b id="radOut">1.4km</b></div>
-        <input type="range" id="radius" min="0.4" max="3" step="0.1" value="1.4" aria-label="범위" />
-        <div class="ticks"><span>0.4km</span><span>3.0km</span></div>
-      </div>
-
-      <div class="sec">
-        <div class="lab"><span>쉬어 갈 곳</span></div>
-        <div class="chiprow" id="kindChips"></div>
-        <div class="sub" id="foodSub" style="display:none">
-          <div class="lab" style="margin-bottom:9px"><span>음식 취향</span><button class="link" id="clearCuisines">모두 해제</button></div>
-          <div class="chiprow" id="cuisineChips" style="margin-bottom:16px"></div>
-          <div class="rowlab">머무는 방식</div>
-          <div class="seg" id="turnSeg">
-            <button data-v="fast">빨리 먹고 다시 걷기</button>
-            <button data-v="slow" class="on">오래 앉아 쉬기</button>
+        <div class="sec" data-step="2">
+          <div class="lab"><span>걷고 싶은 시간</span><b id="minOut">1시간 30분</b></div>
+          <input type="range" id="minutes" min="20" max="240" step="10" value="90" aria-label="걷고 싶은 시간" />
+          <div class="ticks"><span>20분</span><span>4시간</span></div>
+        </div>
+        <div class="sec" data-step="2">
+          <div class="lab"><span>출발지에서 벗어날 범위</span><b id="radOut">1.4km</b></div>
+          <input type="range" id="radius" min="0.4" max="3" step="0.1" value="1.4" aria-label="범위" />
+          <div class="ticks"><span>0.4km</span><span>3.0km</span></div>
+        </div>
+        <div class="sec" data-step="2">
+          <div class="lab"><span>중간에 들를 스팟 수</span><b id="countOut">자동</b></div>
+          <div class="countwrap">
+            <div class="numfield">
+              <button id="cntMinus" title="줄이기"><i class="fa-solid fa-minus"></i></button>
+              <input type="number" id="cntInput" min="1" max="12" step="1" placeholder="자동" aria-label="스팟 수" />
+              <button id="cntPlus" title="늘리기"><i class="fa-solid fa-plus"></i></button>
+            </div>
+            <button class="autobtn on" id="cntAuto">자동</button>
           </div>
         </div>
+
+        <div class="sec" data-step="3">
+          <div class="lab"><span>보고 싶은 것</span><button class="link" id="clearInterests">모두 해제</button></div>
+          <div class="chiprow" id="interestChips"></div>
+        </div>
+
+        <div class="sec" data-step="4">
+          <div class="lab"><span>쉬어 갈 곳</span></div>
+          <div class="chiprow" id="kindChips"></div>
+          <div class="sub" id="foodSub" style="display:none">
+            <div class="lab" style="margin-bottom:9px">
+              <span>음식 취향</span>
+              <span><button class="link" id="openPresets">사전 설정</button>
+              <button class="link" id="clearCuisines" style="margin-left:10px">모두 해제</button></span>
+            </div>
+            <div class="chiprow" id="cuisineChips" style="margin-bottom:16px"></div>
+            <div class="rowlab">머무는 방식</div>
+            <div class="seg" id="turnSeg">
+              <button data-v="fast">빨리 먹고 다시 걷기</button>
+              <button data-v="slow" class="on">오래 앉아 쉬기</button>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" id="rollBtn" data-step="4"><span class="die">◆</span><span id="rollLabel">코스 뽑기</span></button>
+
+        <div class="results" id="results" data-step="5"></div>
+        <div class="status" id="status" data-step="5"></div>
+        <p class="foot" data-step="5">
+          장소·경로·이미지 <a href="https://www.geoapify.com/" target="_blank" rel="noopener">Geoapify</a>,
+          지도 &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> 기여자, 개발·운영 puarr❤️.
+          평점·리뷰는 제공되지 않으며, 추천은 취향·동선·머무는 방식만으로 계산합니다.
+        </p>
       </div>
 
-      <button class="btn btn-primary" id="rollBtn"><span class="die">◆</span><span id="rollLabel">코스 뽑기</span></button>
-
-      <div class="results" id="results"></div>
-      <div class="status" id="status"></div>
-
-      <p class="foot">
-        장소·경로·이미지 <a href="https://www.geoapify.com/" target="_blank" rel="noopener">Geoapify</a>,
-        지도 &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> 기여자, 운영 및 개발 puarr.
-        평점·리뷰는 제공되지 않으며, 추천은 취향·동선·머무는 방식만으로 계산합니다.
-      </p>
+      <div class="sheet-foot">
+        <button class="btn btn-secondary" id="stepPrev" style="flex:1">이전</button>
+        <button class="btn btn-primary" id="stepNext" style="flex:1.4">다음</button>
+      </div>
     </div>
   </aside>
 
   <div class="mapwrap">
     <div id="map"></div>
+    <div class="metricfloat" id="metricFloat"></div>
     <button class="floatbtn" id="gpsBtn" title="현재 위치"><i class="fa-solid fa-crosshairs"></i></button>
     <button class="floatbtn" id="locateBtn" title="출발지 보기"><i class="fa-solid fa-location-dot"></i></button>
     <button class="floatbtn" id="addSpotBtn" title="코스에 스팟 추가"><i class="fa-solid fa-plus"></i></button>
@@ -385,6 +587,39 @@ textarea:focus{border-color:var(--ink)}
     </div>
     <div class="toast" id="toast"></div>
   </div>
+
+  <div class="modal" id="settingsModal">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>설정</h2>
+        <button class="icobtn lg" id="closeSettings"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-sec">
+        <h3>화면 테마</h3>
+        <div class="seg" id="themeSeg">
+          <button data-t="light">라이트</button>
+          <button data-t="dark">다크</button>
+          <button data-t="system">시스템 설정</button>
+        </div>
+      </div>
+      <div class="modal-sec">
+        <h3>저장된 음식 취향 사전 설정</h3>
+        <ul class="presetlist" id="presetList"></ul>
+        <div class="presetdraft">
+          <div class="lab">
+            <span>새 사전 설정 만들기</span>
+            <span><button class="link" id="copyCurrent">지금 선택 불러오기</button>
+            <button class="link" id="clearDraft" style="margin-left:10px">비우기</button></span>
+          </div>
+          <div class="chiprow" id="presetChips" style="margin-bottom:14px"></div>
+          <div class="presetform">
+            <input id="presetName" type="text" placeholder="이름 (예: 평일 점심)" maxlength="20" />
+            <button class="mini" id="savePreset">저장</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -393,6 +628,8 @@ const GEOAPIFY_KEY='5e87f91065634d9db66c2a453ce63b69';
 const API={places:'https://api.geoapify.com/v2/places',routing:'https://api.geoapify.com/v1/routing',
   autocomplete:'https://api.geoapify.com/v1/geocode/autocomplete',reverse:'https://api.geoapify.com/v1/geocode/reverse',
   staticmap:'https://maps.geoapify.com/v1/staticmap'};
+/* 지도 위 색은 테마와 무관하게 고정한다 — 지도는 항상 라이트라서 */
+const MAPC={primary:'#1F6F52',food:'#B87514',custom:'#155A41',startPin:'#C0452E',alt:'#8A8F98',ring:'#ffffff'};
 
 const CAT={
   park:{label:'공원',dwell:18,api:['leisure.park','leisure.park.nature_reserve','national_park']},
@@ -424,7 +661,6 @@ const KIND={
   convenience:{label:'편의점',dwell:8,api:['commercial.convenience']},
   books:{label:'책방',dwell:25,api:['commercial.books']},
 };
-/* 음식 취향 — Geoapify의 요리별 하위 카테고리를 묶어 놓았다 */
 const CUISINE={
   '한식':{api:['catering.restaurant.korean']},
   '일식':{api:['catering.restaurant.japanese','catering.restaurant.sushi','catering.restaurant.ramen','catering.restaurant.beef_bowl','catering.fast_food.ramen']},
@@ -445,15 +681,15 @@ const CUISINE={
   '차·버블티':{api:['catering.cafe.tea','catering.cafe.bubble_tea']},
   '비건':{api:[],condition:'vegan'},
 };
-/* 응답에 실려 온 하위 카테고리를 다시 취향 이름으로 되돌리는 표 */
 const CUISINE_LABEL={};
 Object.entries(CUISINE).forEach(([label,def])=>(def.api||[]).forEach(a=>{
-  const leaf=a.split('.').pop(); if(!CUISINE_LABEL[leaf])CUISINE_LABEL[leaf]=label}));
-CUISINE_LABEL.vegan='비건'; CUISINE_LABEL.vegetarian='비건';
+  const leaf=a.split('.').pop();if(!CUISINE_LABEL[leaf])CUISINE_LABEL[leaf]=label}));
+CUISINE_LABEL.vegan='비건';CUISINE_LABEL.vegetarian='비건';
 
 const PACE={hike:{label:'워킹 중심',sub:'많이 걷기',dwellMul:.45,pick:'far',maxStops:10},
   stroll:{label:'산책 중심',sub:'적당히 걷기',dwellMul:1,pick:'mid',maxStops:8},
   mill:{label:'마실 중심',sub:'적게 걷기',dwellMul:1.8,pick:'near',maxStops:6}};
+const STEPS=[null,'걷는 방식','얼마나 걸을까요?','무엇을 볼까요?','어디서 쉴까요?','오늘의 코스'];
 
 /* ---------- 유틸 ---------- */
 const SPEED=70;
@@ -466,22 +702,21 @@ function bearingDeg(a,b){
   return (toDeg(Math.atan2(y,x))+360)%360;
 }
 const bearingLL=(a,b)=>bearingDeg({lat:a[0],lng:a[1]},{lat:b[0],lng:b[1]});
-const walkMin=m=>m/SPEED, clamp01=v=>Math.max(0,Math.min(1,v));
+const walkMin=m=>m/SPEED,clamp01=v=>Math.max(0,Math.min(1,v));
 const fmtMin=m=>{const t=Math.round(m);return t>=60?`${Math.floor(t/60)}시간${t%60?` ${t%60}분`:''}`:`${t}분`};
 const fmtDist=m=>m<1000?`${Math.round(m/10)*10}m`:`${(m/1000).toFixed(1)}km`;
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const isMobile=()=>window.matchMedia('(max-width:880px)').matches;
 async function getJSON(url,timeout=12000){
   const ctrl=new AbortController(),t=setTimeout(()=>ctrl.abort(),timeout);
   try{
     const res=await fetch(url,{signal:ctrl.signal});clearTimeout(t);
-    if(!res.ok) throw new Error(res.status===401?'API 키가 거부됐어요':res.status===429?'오늘 무료 사용량을 다 썼어요':`서버 응답 ${res.status}`);
+    if(!res.ok)throw new Error(res.status===401?'API 키가 거부됐어요':res.status===429?'오늘 API 사용량을 다 썼어요':`서버 응답 ${res.status}`);
     return await res.json();
   }catch(e){clearTimeout(t);throw new Error(e.name==='AbortError'?'응답이 너무 느려요':(e.message||'요청 실패'))}
 }
-/* 같은 구간을 두 번 지나는 비율 */
 function overlapRatio(latlngs){
-  const k=(a,b)=>{const p=`${a[0].toFixed(5)},${a[1].toFixed(5)}`,q=`${b[0].toFixed(5)},${b[1].toFixed(5)}`;
-    return p<q?p+'|'+q:q+'|'+p};
+  const k=(a,b)=>{const p=`${a[0].toFixed(5)},${a[1].toFixed(5)}`,q=`${b[0].toFixed(5)},${b[1].toFixed(5)}`;return p<q?p+'|'+q:q+'|'+p};
   const seen=new Set();let total=0,dup=0;
   for(let i=1;i<latlngs.length;i++){
     const d=metersBetween({lat:latlngs[i-1][0],lng:latlngs[i-1][1]},{lat:latlngs[i][0],lng:latlngs[i][1]});
@@ -490,6 +725,12 @@ function overlapRatio(latlngs){
   }
   return total?dup/total:0;
 }
+/* 저장소 — 안 되는 환경에서는 메모리로 대체 */
+const mem={};
+const store={
+  get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return k in mem?mem[k]:d}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){mem[k]=v}},
+};
 
 /* ---------- 상태 ---------- */
 const cfg={pace:'stroll',minutes:90,radiusKm:1.4,stopCount:'auto',noBacktrack:true,
@@ -497,62 +738,308 @@ const cfg={pace:'stroll',minutes:90,radiusKm:1.4,stopCount:'auto',noBacktrack:tr
   stopKinds:new Set(['cafe']),cuisines:new Set(),turnover:'slow'};
 let start={lat:37.5570,lng:126.9245,name:'홍대입구'};
 let routes=[],selected=0,notes={},openIdx=null;
-let pickMode=false,addMode=false;
+let pickMode=false,addMode=false,step=1;
 let pool={sights:[],foods:[]},poolKey=null,dataState='idle',dataError='';
+let presets=store.get('walk.presets',[]);
+let themePref=store.get('walk.theme','system');
 const ROUTE_LABELS=['A 코스','B 코스','C 코스'];
-let COLORS={};
-function readColors(){
-  const cs=getComputedStyle(document.documentElement);
-  const g=n=>cs.getPropertyValue(n).trim();
-  COLORS={primary:g('--primary'),food:g('--food'),custom:g('--primary-active'),
-    startPin:g('--start-pin'),alt:g('--alt'),canvas:g('--canvas'),ink:g('--ink')};
+
+/* ---------- 테마 ---------- */
+function applyTheme(){
+  if(themePref==='system')document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme',themePref);
+  document.querySelectorAll('#themeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.t===themePref));
 }
-readColors();
+document.getElementById('themeSeg').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+  themePref=b.dataset.t;store.set('walk.theme',themePref);applyTheme()}));
+applyTheme();
 
-/* ---------- 지도 + 테마 ---------- */
-const TILES={
-  light:{url:'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attr:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'},
-  dark:{url:'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attr:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'},
-};
-const darkMQ=window.matchMedia('(prefers-color-scheme: dark)');
-const isDark=()=>darkMQ.matches;
+/* ---------- 지도 (항상 라이트 타일) ---------- */
 const map=L.map('map',{zoomControl:false}).setView([start.lat,start.lng],15);
-let tileLayer=L.tileLayer(isDark()?TILES.dark.url:TILES.light.url,
-  {maxZoom:19,attribution:isDark()?TILES.dark.attr:TILES.light.attr}).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,
+  attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(map);
 L.control.zoom({position:'bottomright'}).addTo(map);
-
 const numIcon=(label,color)=>L.divIcon({className:'',
   html:`<div class="pin" style="background:${color}">${label}</div>`,iconSize:[28,28],iconAnchor:[14,14]});
 const mapPinIcon=color=>L.divIcon({className:'',
   html:`<div class="mappin" style="color:${color}"><i class="fa-solid fa-location-dot"></i></div>`,
   iconSize:[38,42],iconAnchor:[19,40],popupAnchor:[0,-36]});
-let startMarker=L.marker([start.lat,start.lng],{icon:mapPinIcon(COLORS.startPin),zIndexOffset:1000}).addTo(map);
+const startMarker=L.marker([start.lat,start.lng],{icon:mapPinIcon(MAPC.startPin),zIndexOffset:1000}).addTo(map);
 const markersLayer=L.layerGroup().addTo(map);
 const routesLayer=L.layerGroup().addTo(map);
 const arrowsLayer=L.layerGroup().addTo(map);
 let radiusCircle=null;
 function drawRadius(){
   if(radiusCircle)map.removeLayer(radiusCircle);
-  radiusCircle=L.circle([start.lat,start.lng],{radius:cfg.radiusKm*1000,color:COLORS.primary,weight:1,
+  radiusCircle=L.circle([start.lat,start.lng],{radius:cfg.radiusKm*1000,color:MAPC.primary,weight:1,
     dashArray:'4 8',opacity:.5,fillOpacity:.04}).addTo(map);
 }
-function applyTheme(){
-  readColors();
-  const t=isDark()?TILES.dark:TILES.light;
-  tileLayer.setUrl(t.url);
-  map.attributionControl.removeAttribution(TILES.light.attr);
-  map.attributionControl.removeAttribution(TILES.dark.attr);
-  map.attributionControl.addAttribution(t.attr);
-  startMarker.setIcon(mapPinIcon(COLORS.startPin));
-  drawRadius();
-  if(routes.length){drawAll(false);renderResults()}
+const sheetEl=document.getElementById('sheet');
+const sheetH=()=>isMobile()?sheetEl.offsetHeight:0;
+/* 모바일에서는 바텀시트에 가리지 않도록 지도 중심을 위로 밀어 올린다 */
+function centerOn(latlng,zoom){
+  const z=zoom??map.getZoom();
+  if(isMobile()){
+    const off=sheetH()/2+20;
+    const p=map.project(L.latLng(latlng.lat??latlng[0],latlng.lng??latlng[1]),z).add([0,off]);
+    map.flyTo(map.unproject(p,z),z,{duration:.6});
+  }else map.flyTo([latlng.lat??latlng[0],latlng.lng??latlng[1]],z,{duration:.6});
 }
-darkMQ.addEventListener('change',applyTheme);
-
+function fitRoute(latlngs){
+  const b=L.latLngBounds(latlngs);
+  if(isMobile())map.fitBounds(b,{paddingTopLeft:[26,92],paddingBottomRight:[26,sheetH()+26]});
+  else map.fitBounds(b,{padding:[70,70]});
+}
 function toast(msg,ms=3200){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
   clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),ms)}
+
+/* ============================================================
+   단계형 UI (모바일)
+   ============================================================ */
+function updateSheetVar(){
+  const root=document.documentElement;
+  if(!isMobile()){
+    root.style.setProperty('--sheet-top','0px');
+    return;
+  }
+  // 시트는 아래에서 10px + 안전영역만큼 떠 있다. 그 윗면에서 조금 더 띄운 값.
+  root.style.setProperty('--sheet-top',
+    `calc(${sheetEl.offsetHeight}px + 10px + env(safe-area-inset-bottom) + var(--sheet-gap))`);
+}
+/* 요약 문구·부가 정보 — 데스크톱 카드와 모바일 지표 박스가 같은 내용을 쓴다 */
+function summaryDetailHTML(r){
+  const walkM=r.realDurationMin??r.walkTotal;
+  const food=r.stops.find(s=>s.type==='food'),last=r.stops[r.stops.length-1];
+  const ov=Math.round((r.overlap||0)*100);
+  return `<p>${esc(start.name)}에서 출발해${food?` ${esc(food.name)}에서 한 번 쉬고,`:''} ${last?esc(last.name)+'을(를) 지나 ':''}다시 ${esc(start.name)}으로 돌아옵니다.</p>
+    <div class="bullet"><i>✓</i><span>${PACE[cfg.pace].label} · 걷기 ${fmtMin(walkM)} · 머무름 ${fmtMin(r.stayTotal)}</span></div>
+    <div class="bullet"><i>${ov<=10?'✓':'!'}</i><span>${ov<=10?`같은 길을 거의 다시 걷지 않아요 (겹침 ${ov}%)`:`왔던 길이 ${ov}% 겹칩니다`}</span></div>
+    <div class="darkacts"><button class="btn btn-ghost-dark" data-dl="1">이미지로 저장</button></div>`;
+}
+function metricRowHTML(r){
+  const dist=(r.realDistanceM?r.realDistanceM/1000:r.km).toFixed(1);
+  const time=fmtMin((r.realDurationMin??r.walkTotal)+r.stayTotal);
+  return `<div><span class="mlabel">거리</span><b>${dist}km</b></div><div class="sepr"></div>`
+    +`<div><span class="mlabel">시간</span><b>${time}</b></div><div class="sepr"></div>`
+    +`<div><span class="mlabel">스팟</span><b>${r.stops.length}</b></div>`;
+}
+/* 마지막 단계에서만 지도 위 박스를 띄운다 */
+let metricCompact=false;
+function updateMetricFloat(){
+  const el=document.getElementById('metricFloat');
+  const r=routes[selected];
+  if(!isMobile()||step!==5||!r){el.classList.remove('show');return}
+  // 내용은 항상 그려 두고 접힘/펼침은 클래스로만 바꾼다 (전환이 끊기지 않도록)
+  el.innerHTML=`<div class="mrow">${metricRowHTML(r)}</div>`
+    +`<div class="mdetail">${summaryDetailHTML(r)}</div>`;
+  el.classList.toggle('compact',metricCompact);
+  el.classList.add('show');
+  el.querySelectorAll('[data-dl]').forEach(b=>b.addEventListener('click',e=>{
+    e.stopPropagation();downloadImage()}));
+}
+function setMetricCompact(v){
+  const el=document.getElementById('metricFloat');
+  if(metricCompact===v)return;
+  metricCompact=v;
+  el.classList.toggle('compact',v);   // 다시 그리지 않고 클래스만 토글
+}
+document.getElementById('metricFloat').addEventListener('click',()=>setMetricCompact(false));
+/* 지도든 시트든 다른 곳을 누르면 접는다 */
+document.addEventListener('pointerdown',e=>{
+  if(e.target.closest('#metricFloat'))return;
+  if(document.getElementById('metricFloat').classList.contains('show'))setMetricCompact(true);
+},true);
+function showStep(n,dir){
+  const from=step;
+  step=Math.max(1,Math.min(5,n));
+  document.getElementById('stepTitle').textContent=STEPS[step];
+  document.getElementById('stepDots').innerHTML=[1,2,3,4,5].map(i=>`<i class="${i===step?'on':''}"></i>`).join('');
+  document.querySelectorAll('[data-step]').forEach(el=>{
+    el.style.display=(!isMobile()||+el.dataset.step===step)?'':'none'});
+  if(!isMobile())document.querySelectorAll('[data-step]').forEach(el=>el.style.display='');
+  const prev=document.getElementById('stepPrev'),next=document.getElementById('stepNext');
+  prev.style.display=step===1?'none':'';
+  if(step===4)next.innerHTML='<span class="die">◆</span> 코스 뽑기';
+  else if(step===5){prev.style.display='';prev.textContent='조건 바꾸기';next.textContent='다시 뽑기'}
+  else next.textContent='다음';
+  if(step!==5&&step!==1)prev.textContent='이전';
+
+  sheetEl.classList.remove('collapsed');
+  document.querySelector('#sheetToggle i').className='fa-solid fa-chevron-down';
+  updateMetricFloat();
+
+  // 전환 애니메이션
+  if(isMobile()&&from!==step){
+    const body=document.getElementById('sheetBody');
+    const cls=(dir==='prev'||step<from)?'step-prev':'step-next';
+    body.classList.remove('step-prev','step-next');
+    void body.offsetWidth;
+    body.classList.add(cls);
+    body.addEventListener('animationend',()=>body.classList.remove(cls),{once:true});
+  }
+  document.getElementById('sheetBody').scrollTop=0;
+  if(isMobile())setSheetHeight(step===5?snapPoints().full:snapPoints().mid);
+  requestAnimationFrame(updateSheetVar);
+}
+document.getElementById('stepPrev').addEventListener('click',()=>{
+  if(step===5)showStep(4,'prev');else showStep(step-1,'prev')});
+document.getElementById('stepNext').addEventListener('click',()=>{
+  if(step===4||step===5)roll();else showStep(step+1,'next')});
+
+/* ---------- 바텀시트 높이 · 손잡이 드래그 ---------- */
+function headerH(){
+  const grab=document.getElementById('grabZone').offsetHeight;
+  const head=sheetEl.querySelector('.sheet-head').offsetHeight;
+  const snip=sheetEl.querySelector('.snippet').offsetHeight;
+  return grab+head+snip+18;
+}
+function snapPoints(){
+  const vh=window.innerHeight;
+  return {collapsed:headerH(),mid:Math.round(vh*.48),full:Math.round(vh*.82)};
+}
+/* 시트 높이를 JS로 직접 애니메이션한다.
+   CSS transition에 맡기면 애니메이션 도중 실제 높이를 매 프레임 읽을 수 없어서
+   워터마크·버튼이 최종 목표값으로 한 번에 점프해버리고, 이후 진행되는 시각적
+   움직임을 놓친다. requestAnimationFrame으로 직접 보간하면서 매 프레임
+   updateSheetVar()도 같이 불러 항상 실제 높이를 따라가게 한다. */
+let sheetAnim=null;
+const reduceMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const easeOutCubic=t=>1-Math.pow(1-t,3);
+function animateSheetHeight(target,duration=260){
+  if(sheetAnim)cancelAnimationFrame(sheetAnim);
+  const start=sheetEl.offsetHeight;
+  if(reduceMotion||Math.abs(target-start)<1){
+    sheetEl.style.height=target+'px';updateSheetVar();return;
+  }
+  const t0=performance.now();
+  function tick(now){
+    const p=Math.min(1,(now-t0)/duration);
+    const h=start+(target-start)*easeOutCubic(p);
+    sheetEl.style.height=h+'px';
+    updateSheetVar();
+    if(p<1)sheetAnim=requestAnimationFrame(tick);
+    else sheetAnim=null;
+  }
+  sheetAnim=requestAnimationFrame(tick);
+}
+function setSheetHeight(px){
+  if(!isMobile()){sheetEl.style.height='';return}
+  const s=snapPoints();
+  const h=Math.max(s.collapsed,Math.min(s.full,px));
+  sheetEl.classList.toggle('collapsed',h<=s.collapsed+8);
+  document.querySelector('#sheetToggle i').className=
+    h<=s.collapsed+8?'fa-solid fa-chevron-up':'fa-solid fa-chevron-down';
+  animateSheetHeight(h);
+}
+function snapTo(px){
+  const s=snapPoints();
+  const targets=[s.collapsed,s.mid,s.full];
+  const best=targets.reduce((a,b)=>Math.abs(b-px)<Math.abs(a-px)?b:a);
+  setSheetHeight(best);
+}
+let dragState=null;
+const grabZone=document.getElementById('grabZone');
+grabZone.addEventListener('pointerdown',e=>{
+  if(!isMobile())return;
+  if(sheetAnim){cancelAnimationFrame(sheetAnim);sheetAnim=null}
+  dragState={y:e.clientY,h:sheetEl.offsetHeight,moved:false};
+  sheetEl.classList.add('dragging');document.body.classList.add('sheet-dragging');
+  grabZone.setPointerCapture(e.pointerId);
+});
+grabZone.addEventListener('pointermove',e=>{
+  if(!dragState)return;
+  const dy=e.clientY-dragState.y;
+  if(Math.abs(dy)>5)dragState.moved=true;
+  const s=snapPoints();
+  sheetEl.style.height=Math.max(s.collapsed,Math.min(s.full,dragState.h-dy))+'px';
+  updateSheetVar();
+});
+function endDrag(e){
+  if(!dragState)return;
+  sheetEl.classList.remove('dragging');document.body.classList.remove('sheet-dragging');
+  const moved=dragState.moved;dragState=null;
+  if(moved)snapTo(sheetEl.offsetHeight);
+  else toggleSheet();
+  try{grabZone.releasePointerCapture(e.pointerId)}catch(_){}
+}
+grabZone.addEventListener('pointerup',endDrag);
+grabZone.addEventListener('pointercancel',endDrag);
+
+function toggleSheet(){
+  const s=snapPoints();
+  const cur=sheetEl.offsetHeight;
+  setSheetHeight(cur<=s.collapsed+8?s.mid:s.collapsed);
+}
+document.getElementById('sheetToggle').addEventListener('click',toggleSheet);
+function applyLayout(){
+  if(!isMobile()){sheetEl.style.height='';sheetEl.classList.remove('collapsed')}
+  showStep(step);
+  requestAnimationFrame(()=>{updateSheetVar();map.invalidateSize()});
+}
+window.addEventListener('resize',()=>setTimeout(applyLayout,150));
+
+/* ============================================================
+   설정 모달
+   ============================================================ */
+const modal=document.getElementById('settingsModal');
+function openSettings(){modal.classList.add('show');renderPresets()}
+function closeSettings(){modal.classList.remove('show')}
+document.getElementById('settingsBtn').addEventListener('click',openSettings);
+document.getElementById('settingsBtnM').addEventListener('click',openSettings);
+document.getElementById('closeSettings').addEventListener('click',closeSettings);
+document.getElementById('openPresets').addEventListener('click',openSettings);
+modal.addEventListener('click',e=>{if(e.target===modal)closeSettings()});
+/* 사전 설정은 조건 화면과 똑같이 칩으로 고른다 */
+let presetDraft=new Set();
+function renderPresetChips(){
+  const el=document.getElementById('presetChips');
+  el.innerHTML=Object.keys(CUISINE).map(c=>
+    `<button class="chip food ${presetDraft.has(c)?'on':''}" data-k="${esc(c)}">${esc(c)}</button>`).join('');
+  el.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+    const k=b.dataset.k;presetDraft.has(k)?presetDraft.delete(k):presetDraft.add(k);
+    b.classList.toggle('on')}));
+}
+function renderPresets(){
+  renderPresetChips();
+  const ul=document.getElementById('presetList');
+  if(!presets.length){
+    ul.innerHTML=`<li style="border:0"><span class="emptyline">저장된 사전 설정이 없어요. 아래에서 취향을 골라 만들어 보세요.</span></li>`;
+    return;
+  }
+  ul.innerHTML=presets.map((p,i)=>`<li>
+    <span class="pname">${esc(p.name)}<span class="pitems">${esc(p.cuisines.join(' · ')||'선택 없음')}</span></span>
+    <button class="mini" data-apply="${i}">적용</button>
+    <button class="mini" data-edit="${i}" title="아래에서 수정"><i class="fa-solid fa-pen"></i></button>
+    <button class="mini danger" data-del="${i}" title="삭제"><i class="fa-solid fa-trash"></i></button>
+  </li>`).join('');
+  ul.querySelectorAll('[data-apply]').forEach(b=>b.addEventListener('click',()=>{
+    const p=presets[+b.dataset.apply];
+    cfg.cuisines=new Set(p.cuisines.filter(c=>CUISINE[c]));
+    if(!cfg.stopKinds.size)cfg.stopKinds.add('restaurant');
+    poolKey=null;refreshChips();renderSnippet();closeSettings();
+    toast(`"${p.name}" 사전 설정을 적용했어요`)}));
+  ul.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>{
+    const p=presets[+b.dataset.edit];
+    presetDraft=new Set(p.cuisines);
+    document.getElementById('presetName').value=p.name;
+    renderPresetChips();
+    document.getElementById('presetChips').scrollIntoView({behavior:'smooth',block:'center'})}));
+  ul.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',()=>{
+    presets.splice(+b.dataset.del,1);store.set('walk.presets',presets);renderPresets()}));
+}
+document.getElementById('copyCurrent').addEventListener('click',()=>{
+  presetDraft=new Set(cfg.cuisines);renderPresetChips()});
+document.getElementById('clearDraft').addEventListener('click',()=>{
+  presetDraft.clear();renderPresetChips()});
+document.getElementById('savePreset').addEventListener('click',()=>{
+  const inp=document.getElementById('presetName');
+  const name=inp.value.trim()||`사전 설정 ${presets.length+1}`;
+  if(!presetDraft.size){toast('취향을 하나 이상 골라 주세요');return}
+  const idx=presets.findIndex(p=>p.name===name);
+  const item={name,cuisines:[...presetDraft]};
+  if(idx>=0)presets[idx]=item;else presets.push(item);
+  store.set('walk.presets',presets);inp.value='';presetDraft.clear();
+  renderPresets();toast(`"${name}"으로 저장했어요`)});
 
 /* ============================================================
    조건 UI
@@ -568,17 +1055,14 @@ const noBackBtn=document.getElementById('noBackBtn');
 noBackBtn.addEventListener('click',()=>{
   cfg.noBacktrack=!cfg.noBacktrack;
   noBackBtn.classList.toggle('on',cfg.noBacktrack);
-  noBackBtn.setAttribute('aria-pressed',String(cfg.noBacktrack));
-  renderSnippet();
-});
+  noBackBtn.setAttribute('aria-pressed',String(cfg.noBacktrack));renderSnippet()});
 
 const cntInput=document.getElementById('cntInput'),cntAuto=document.getElementById('cntAuto'),cntOut=document.getElementById('countOut');
 function syncCount(){
   const auto=cfg.stopCount==='auto';
   cntAuto.classList.toggle('on',auto);
   cntOut.textContent=auto?'자동':`${cfg.stopCount}곳`;
-  cntInput.value=auto?'':cfg.stopCount;
-  renderSnippet();
+  cntInput.value=auto?'':cfg.stopCount;renderSnippet();
 }
 function setCount(v){
   if(v===''||v==null||isNaN(v))cfg.stopCount='auto';
@@ -588,10 +1072,9 @@ function setCount(v){
 cntInput.addEventListener('input',()=>{
   if(cntInput.value===''){cfg.stopCount='auto';cntAuto.classList.add('on');cntOut.textContent='자동';renderSnippet();return}
   const v=parseInt(cntInput.value,10);
-  if(!isNaN(v)){cfg.stopCount=Math.max(1,Math.min(12,v));cntAuto.classList.remove('on');cntOut.textContent=`${cfg.stopCount}곳`;renderSnippet()}
-});
+  if(!isNaN(v)){cfg.stopCount=Math.max(1,Math.min(12,v));cntAuto.classList.remove('on');cntOut.textContent=`${cfg.stopCount}곳`;renderSnippet()}});
 cntInput.addEventListener('blur',()=>{if(cntInput.value!=='')setCount(parseInt(cntInput.value,10))});
-cntInput.addEventListener('keydown',e=>{if(e.key==='Enter'){cntInput.blur();roll()}});
+cntInput.addEventListener('keydown',e=>{if(e.key==='Enter'){cntInput.blur()}});
 document.getElementById('cntMinus').addEventListener('click',()=>setCount(cfg.stopCount==='auto'?4:cfg.stopCount-1));
 document.getElementById('cntPlus').addEventListener('click',()=>setCount(cfg.stopCount==='auto'?4:cfg.stopCount+1));
 cntAuto.addEventListener('click',()=>setCount(''));
@@ -617,6 +1100,7 @@ function refreshChips(){
     document.getElementById('foodSub').style.display=cfg.stopKinds.size?'block':'none'});
   chipRow(document.getElementById('cuisineChips'),Object.fromEntries(Object.keys(CUISINE).map(c=>[c,c])),cfg.cuisines,'');
   document.getElementById('foodSub').style.display=cfg.stopKinds.size?'block':'none';
+  requestAnimationFrame(updateSheetVar);
 }
 refreshChips();
 document.getElementById('clearInterests').addEventListener('click',()=>{cfg.interests.clear();poolKey=null;refreshChips();renderSnippet()});
@@ -658,7 +1142,7 @@ async function doSearch(q){
     if(!items.length){suggestEl.innerHTML=`<button disabled style="color:var(--mute);cursor:default"><div class="nm">일치하는 곳이 없어요</div></button>`;return}
     suggestEl.innerHTML=items.map((p,i)=>`<button data-i="${i}"><div class="nm">${esc(p.name)}</div><div class="rg">${esc(p.region)}</div></button>`).join('');
     suggestEl.querySelectorAll('button[data-i]').forEach(b=>b.addEventListener('click',()=>{
-      const p=items[+b.dataset.i];setStart(p);qEl.value=p.name;suggestEl.style.display='none'}));
+      const p=items[+b.dataset.i];setStart(p);qEl.value=p.name;suggestEl.style.display='none';qEl.blur()}));
   }catch(e){suggestEl.innerHTML=`<button disabled style="color:var(--mute);cursor:default"><div class="nm">검색에 실패했어요</div><div class="rg">${esc(e.message)}</div></button>`}
 }
 document.addEventListener('click',e=>{if(!e.target.closest('.searchwrap'))suggestEl.style.display='none'});
@@ -669,12 +1153,14 @@ document.getElementById('pinBtn').addEventListener('click',()=>{
   pickMode=!pickMode;addMode=false;
   document.getElementById('pinBtn').classList.toggle('on',pickMode);
   document.getElementById('addSpotBtn').classList.remove('on');
+  if(pickMode&&isMobile())setSheetHeight(snapPoints().collapsed);
   toast(pickMode?'지도를 눌러 출발지를 골라 주세요':'지도에서 고르기를 껐어요')});
 document.getElementById('addSpotBtn').addEventListener('click',()=>{
   if(!routes.length){toast('먼저 코스를 뽑아 주세요');return}
   addMode=!addMode;pickMode=false;
   document.getElementById('addSpotBtn').classList.toggle('on',addMode);
   document.getElementById('pinBtn').classList.remove('on');
+  if(addMode&&isMobile())setSheetHeight(snapPoints().collapsed);
   toast(addMode?'코스에 넣고 싶은 곳을 지도에서 눌러 주세요':'스팟 추가를 껐어요')});
 map.on('click',e=>{
   if(pickMode)openNearby(e.latlng,'start','이 근처에서 출발','누른 지점에서 가까운 장소예요. 하나를 고르면 출발지가 맞춰집니다.');
@@ -718,14 +1204,14 @@ document.getElementById('useExact').addEventListener('click',()=>{
   if(pendingLatLng){const p={...pendingLatLng,name:nearbyMode==='add'?'직접 고른 지점':'선택한 지점'};
     if(nearbyMode==='add')insertCustomSpot(p);else setStart(p)}
   closeNearby()});
-document.getElementById('locateBtn').addEventListener('click',()=>map.flyTo([start.lat,start.lng],15.3));
+document.getElementById('locateBtn').addEventListener('click',()=>centerOn(start,15.3));
 function useCurrentLocation(){
   if(!navigator.geolocation){toast('이 브라우저에서는 현재 위치를 쓸 수 없어요');return}
   toast('현재 위치를 확인하는 중…',6000);
   navigator.geolocation.getCurrentPosition(pos=>{
     const p={lat:pos.coords.latitude,lng:pos.coords.longitude};
-    map.flyTo([p.lat,p.lng],15.5,{duration:.7});
     setStart({...p,name:'현재 위치'},false);
+    centerOn(p,15.5);
     openNearby(p,'start','현재 위치에서 출발','정확한 출발지를 고르면 코스가 더 잘 나와요.');
   },err=>toast(err.code===1?'위치 권한이 거부됐어요':err.code===2?'위치를 찾지 못했어요':'위치 확인이 오래 걸려요'),
   {enableHighAccuracy:true,timeout:9000,maximumAge:60000});
@@ -737,7 +1223,7 @@ function setStart(p,fly){
   startMarker.setLatLng([start.lat,start.lng]).bindPopup(`<strong>${esc(start.name)}</strong><br/>출발 · 도착`);
   drawRadius();poolKey=null;routes=[];openIdx=null;
   clearMapLayers();renderResults();renderSnippet();
-  if(fly!==false)map.flyTo([start.lat,start.lng],15.3,{duration:.6});
+  if(fly!==false)centerOn(start,15.3);
 }
 
 /* ============================================================
@@ -795,30 +1281,25 @@ function scoreFood(f,anchor){
   return{total:cuisine+turn+route,dwell,parts:[
     {key:'취향 맞음',v:cuisine,max:36},{key:'머무는 방식',v:turn,max:34},{key:'동선',v:route,max:30}]};
 }
-/* 되돌아가지 않기: 출발지 기준 방위각을 한 방향으로 훑어 큰 원을 그린다 */
 function buildStopsLoop(){
   const P=PACE[cfg.pace];
   const wantFood=cfg.stopKinds.size&&pool.foods.length;
   const target=cfg.stopCount==='auto'?null:cfg.stopCount;
   const sightTarget=target?Math.max(1,target-(wantFood?1:0)):null;
-  const dir=Math.random()<.5?1:-1, base=Math.random()*360;
-  let cand=pool.sights.map(s=>{
+  const dir=Math.random()<.5?1:-1,base=Math.random()*360;
+  const cand=pool.sights.map(s=>{
     let a=(bearingDeg(start,s)-base+360)%360;
     if(dir<0)a=(360-a)%360;
-    return {...s,dwell:Math.max(4,Math.round(s.dwell*P.dwellMul)),ang:a};
-  }).sort((a,b)=>a.ang-b.ang);
-  if(!cand.length) return [];
+    return{...s,dwell:Math.max(4,Math.round(s.dwell*P.dwellMul)),ang:a}}).sort((a,b)=>a.ang-b.ang);
+  if(!cand.length)return[];
   const stops=[];let used=0,lastAng=-1,cur={...start};
-  const budget=cfg.minutes,reserve=.16;
-  const cap=sightTarget||P.maxStops;
-  // 각도를 균등하게 나눠 그 구간에서 한 곳씩 고른다
+  const budget=cfg.minutes,reserve=.16,cap=sightTarget||P.maxStops;
   const slots=Math.min(cap,cand.length);
   for(let i=0;i<slots;i++){
-    const lo=(360/slots)*i, hi=(360/slots)*(i+1);
+    const lo=(360/slots)*i,hi=(360/slots)*(i+1);
     let bucket=cand.filter(s=>s.ang>=lo&&s.ang<hi&&s.ang>lastAng&&!stops.includes(s));
-    if(!bucket.length) bucket=cand.filter(s=>s.ang>=lo&&!stops.includes(s)).slice(0,3);
-    if(!bucket.length) continue;
-    // 같은 구간 안에서는 가까운 쪽을 조금 더 자주 고른다
+    if(!bucket.length)bucket=cand.filter(s=>s.ang>=lo&&!stops.includes(s)).slice(0,3);
+    if(!bucket.length)continue;
     bucket.sort((a,b)=>metersBetween(a,cur)-metersBetween(b,cur));
     const pickFrom=bucket.slice(0,Math.min(3,bucket.length));
     const next=pickFrom[Math.floor(Math.random()*pickFrom.length)];
@@ -892,11 +1373,14 @@ function pack(built,r){
     routeSource:r?'geoapify':'straight',overlap:overlapRatio(latlngs)};
 }
 async function roll(){
-  const btn=document.getElementById('rollBtn');
-  btn.disabled=true;btn.classList.add('rolling');document.getElementById('rollLabel').textContent='뽑는 중';
+  const btns=[document.getElementById('rollBtn'),document.getElementById('stepNext')];
+  btns.forEach(b=>{b.disabled=true;b.classList.add('rolling')});
+  document.getElementById('rollLabel').textContent='뽑는 중';
+  const nextBtn=document.getElementById('stepNext');const nextHTML=nextBtn.innerHTML;
+  nextBtn.innerHTML='<span class="die">◆</span> 뽑는 중';
   try{
     const ok=await loadPlaces();
-    if(!ok){routes=[];clearMapLayers();renderResults();return}
+    if(!ok){routes=[];clearMapLayers();renderResults();if(isMobile())showStep(5);return}
     const cands=[],seen=new Set();
     for(let i=0;i<12&&cands.length<3;i++){
       const s=buildStops();if(!s.length)continue;
@@ -908,15 +1392,17 @@ async function roll(){
     const built=cands.map(recompute);
     const fetched=await Promise.all(built.map(b=>fetchRoute(b.stops)));
     routes=built.map((b,i)=>pack(b,fetched[i]));
-    // 되돌아가지 않기를 켰으면 겹침이 적은 코스를 앞으로
     routes.sort((a,b)=>cfg.noBacktrack
-      ? (a.overlap-b.overlap)||((a.realDistanceM??a.km*1000)-(b.realDistanceM??b.km*1000))
-      : (a.realDistanceM??a.km*1000)-(b.realDistanceM??b.km*1000));
-    selected=0;openIdx=null;drawAll();
+      ?(a.overlap-b.overlap)||((a.realDistanceM??a.km*1000)-(b.realDistanceM??b.km*1000))
+      :(a.realDistanceM??a.km*1000)-(b.realDistanceM??b.km*1000));
+    selected=0;openIdx=null;metricCompact=false;
     document.getElementById('heroBlock').style.display='none';
-    renderResults();
+    if(isMobile())showStep(5);
+    renderResults();drawAll();
   }finally{
-    btn.disabled=false;btn.classList.remove('rolling');document.getElementById('rollLabel').textContent='다시 뽑기';
+    btns.forEach(b=>{b.disabled=false;b.classList.remove('rolling')});
+    document.getElementById('rollLabel').textContent='다시 뽑기';
+    nextBtn.innerHTML=step===5?'다시 뽑기':nextHTML;
   }
 }
 
@@ -968,6 +1454,7 @@ async function insertCustomSpot(p){
   }
   r.stops.splice(best,0,spot);
   toast(`${spot.name}을(를) ${best+1}번째로 넣었어요`);
+  if(isMobile()){showStep(5)}
   await refreshSelected(false);
 }
 
@@ -977,19 +1464,18 @@ async function insertCustomSpot(p){
 function clearMapLayers(){routesLayer.clearLayers();arrowsLayer.clearLayers();markersLayer.clearLayers()}
 const arrowIcon=deg=>L.divIcon({className:'',iconSize:[18,18],iconAnchor:[9,9],
   html:`<div class="arrow" style="transform:rotate(${deg}deg)"><svg width="13" height="13" viewBox="0 0 16 16">
-  <path d="M8 1.5 L12.6 12.5 L8 9.9 L3.4 12.5 Z" fill="${COLORS.primary}" stroke="${COLORS.canvas}" stroke-width="1.2" stroke-linejoin="round"/></svg></div>`});
+  <path d="M8 1.5 L12.6 12.5 L8 9.9 L3.4 12.5 Z" fill="${MAPC.primary}" stroke="${MAPC.ring}" stroke-width="1.2" stroke-linejoin="round"/></svg></div>`});
 function drawArrows(latlngs){
   arrowsLayer.clearLayers();
   if(latlngs.length<2)return;
   let total=0;
   for(let i=1;i<latlngs.length;i++)total+=metersBetween({lat:latlngs[i-1][0],lng:latlngs[i-1][1]},{lat:latlngs[i][0],lng:latlngs[i][1]});
-  const step=Math.max(55,total/30);   // 간격을 촘촘하게
-  let acc=0;
+  const step2=Math.max(55,total/30);let acc=0;
   for(let i=1;i<latlngs.length;i++){
     const a=latlngs[i-1],b=latlngs[i];
     const seg=metersBetween({lat:a[0],lng:a[1]},{lat:b[0],lng:b[1]});
     acc+=seg;
-    if(acc>=step&&seg>.5){acc=0;
+    if(acc>=step2&&seg>.5){acc=0;
       L.marker([(a[0]+b[0])/2,(a[1]+b[1])/2],{icon:arrowIcon(bearingLL(a,b)),interactive:false,zIndexOffset:-100}).addTo(arrowsLayer)}
   }
 }
@@ -998,40 +1484,37 @@ function drawAll(fit=true){
   if(!routes.length)return;
   routes.forEach((r,i)=>{
     if(i===selected)return;
-    const line=L.polyline(r.latlngs,{color:COLORS.alt,weight:3,opacity:.45,dashArray:'4 7'}).addTo(routesLayer);
+    const line=L.polyline(r.latlngs,{color:MAPC.alt,weight:3,opacity:.45,dashArray:'4 7'}).addTo(routesLayer);
     line.on('click',()=>{selected=i;openIdx=null;drawAll(false);renderResults()});
     line.bindTooltip(`${ROUTE_LABELS[i]||`${i+1} 코스`} — 눌러서 보기`,{sticky:true});
   });
   const r=routes[selected];
-  L.polyline(r.latlngs,{color:COLORS.food,weight:9,opacity:.25,lineCap:'round',lineJoin:'round'}).addTo(routesLayer);
-  L.polyline(r.latlngs,{color:COLORS.primary,weight:3.4,opacity:.95,lineCap:'round',lineJoin:'round',
+  L.polyline(r.latlngs,{color:MAPC.food,weight:9,opacity:.25,lineCap:'round',lineJoin:'round'}).addTo(routesLayer);
+  L.polyline(r.latlngs,{color:MAPC.primary,weight:3.4,opacity:.95,lineCap:'round',lineJoin:'round',
     dashArray:r.routeSource==='geoapify'?null:'1 9'}).addTo(routesLayer);
   drawArrows(r.latlngs);
   r.stops.forEach((s,i)=>{
-    const color=s.type==='food'?COLORS.food:(s.custom?COLORS.custom:COLORS.primary);
+    const color=s.type==='food'?MAPC.food:(s.custom?MAPC.custom:MAPC.primary);
     const m=L.marker([s.lat,s.lng],{icon:numIcon(i+1,color)}).addTo(markersLayer);
     m.bindPopup(`<strong>${esc(s.name)}</strong><br/>${s.type==='food'?KIND[s.kind].label:(s.custom?'직접 추가':CAT[s.cat]?.label||'스팟')} · 걷기 ${Math.round(s.walkFromPrev)}분`);
-    m.on('click',()=>{openIdx=i;renderResults();
+    m.on('click',()=>{openIdx=i;if(isMobile())showStep(5);renderResults();
       const c=document.querySelector(`[data-idx="${i}"]`);if(c)c.scrollIntoView({behavior:'smooth',block:'center'})});
   });
-  if(fit)map.fitBounds(L.latLngBounds(r.latlngs),{padding:[70,70]});
+  if(fit)fitRoute(r.latlngs);
   renderStatus();
 }
 
 /* ============================================================
-   코스 이미지 저장
+   이미지 저장
    ============================================================ */
 function projectPx(lat,lng,zoom){
-  const s=256*Math.pow(2,zoom);
-  const x=(lng+180)/360*s;
-  const sl=Math.sin(lat*Math.PI/180);
+  const s=256*Math.pow(2,zoom),x=(lng+180)/360*s,sl=Math.sin(lat*Math.PI/180);
   return{x,y:(0.5-Math.log((1+sl)/(1-sl))/(4*Math.PI))*s};
 }
 function fitZoom(b,W,H,pad){
   for(let z=19;z>=1;z--){
     const a=projectPx(b.n,b.w,z),c=projectPx(b.s,b.e,z);
-    if(Math.abs(c.x-a.x)<=W-pad*2&&Math.abs(c.y-a.y)<=H-pad*2)return z;
-  }
+    if(Math.abs(c.x-a.x)<=W-pad*2&&Math.abs(c.y-a.y)<=H-pad*2)return z}
   return 1;
 }
 async function downloadImage(){
@@ -1041,10 +1524,8 @@ async function downloadImage(){
   let n=-90,s=90,e=-180,w=180;
   [...r.latlngs,[start.lat,start.lng],...r.stops.map(x=>[x.lat,x.lng])]
     .forEach(([la,ln])=>{n=Math.max(n,la);s=Math.min(s,la);e=Math.max(e,ln);w=Math.min(w,ln)});
-  const zoom=fitZoom({n,s,e,w},W,H,60);
-  const cLat=(n+s)/2,cLng=(e+w)/2;
-  const style=isDark()?'dark-matter':'osm-bright';
-  const url=`${API.staticmap}?style=${style}&width=${W}&height=${H}&scaleFactor=${SF}`
+  const zoom=fitZoom({n,s,e,w},W,H,60),cLat=(n+s)/2,cLng=(e+w)/2;
+  const url=`${API.staticmap}?style=osm-bright&width=${W}&height=${H}&scaleFactor=${SF}`
     +`&center=lonlat:${cLng.toFixed(6)},${cLat.toFixed(6)}&zoom=${zoom}&apiKey=${GEOAPIFY_KEY}`;
   toast('이미지를 만드는 중…',9000);
   try{
@@ -1055,46 +1536,40 @@ async function downloadImage(){
     const cv=document.createElement('canvas');
     cv.width=cw;cv.height=ch+footer*SF;
     const g=cv.getContext('2d');
-    g.fillStyle=isDark()?'#0F1211':'#fff';g.fillRect(0,0,cv.width,cv.height);
+    g.fillStyle='#fff';g.fillRect(0,0,cv.width,cv.height);
     g.drawImage(bmp,0,0,cw,ch);
     const ctr=projectPx(cLat,cLng,zoom);
     const XY=(lat,lng)=>{const p=projectPx(lat,lng,zoom);return[(p.x-ctr.x)*SF+cw/2,(p.y-ctr.y)*SF+ch/2]};
-    const ring=isDark()?'#0F1211':'#fff';
-
     const path=new Path2D();
     r.latlngs.forEach(([la,ln],i)=>{const [x,y]=XY(la,ln);i?path.lineTo(x,y):path.moveTo(x,y)});
     g.lineCap='round';g.lineJoin='round';
-    g.strokeStyle=COLORS.food;g.globalAlpha=.28;g.lineWidth=20;g.stroke(path);g.globalAlpha=1;
-    g.strokeStyle=COLORS.primary;g.lineWidth=7;g.stroke(path);
-
+    g.strokeStyle=MAPC.food;g.globalAlpha=.28;g.lineWidth=20;g.stroke(path);g.globalAlpha=1;
+    g.strokeStyle=MAPC.primary;g.lineWidth=7;g.stroke(path);
     let total=0;
     for(let i=1;i<r.latlngs.length;i++)total+=metersBetween({lat:r.latlngs[i-1][0],lng:r.latlngs[i-1][1]},{lat:r.latlngs[i][0],lng:r.latlngs[i][1]});
-    const step=Math.max(55,total/26);let acc=0;
+    const st=Math.max(55,total/26);let acc=0;
     for(let i=1;i<r.latlngs.length;i++){
       const a=r.latlngs[i-1],b=r.latlngs[i];
       const seg=metersBetween({lat:a[0],lng:a[1]},{lat:b[0],lng:b[1]});
       acc+=seg;
-      if(acc>=step&&seg>.5){acc=0;
+      if(acc>=st&&seg>.5){acc=0;
         const [x,y]=XY((a[0]+b[0])/2,(a[1]+b[1])/2);
         g.save();g.translate(x,y);g.rotate(bearingLL(a,b)*Math.PI/180);
         g.beginPath();g.moveTo(0,-11);g.lineTo(7.5,9);g.lineTo(0,4.5);g.lineTo(-7.5,9);g.closePath();
-        g.fillStyle=COLORS.primary;g.fill();g.strokeStyle=ring;g.lineWidth=2.2;g.stroke();g.restore();
-      }
+        g.fillStyle=MAPC.primary;g.fill();g.strokeStyle='#fff';g.lineWidth=2.2;g.stroke();g.restore()}
     }
     r.stops.forEach((sp,i)=>{
       const [x,y]=XY(sp.lat,sp.lng);
       g.beginPath();g.arc(x,y,21,0,Math.PI*2);
-      g.fillStyle=sp.type==='food'?COLORS.food:(sp.custom?COLORS.custom:COLORS.primary);g.fill();
-      g.strokeStyle=ring;g.lineWidth=5;g.stroke();
+      g.fillStyle=sp.type==='food'?MAPC.food:(sp.custom?MAPC.custom:MAPC.primary);g.fill();
+      g.strokeStyle='#fff';g.lineWidth=5;g.stroke();
       g.fillStyle='#fff';g.font='600 22px "IBM Plex Mono", monospace';
-      g.textAlign='center';g.textBaseline='middle';g.fillText(String(i+1),x,y+1);
-    });
+      g.textAlign='center';g.textBaseline='middle';g.fillText(String(i+1),x,y+1)});
     const [sx,sy]=XY(start.lat,start.lng);
-    g.beginPath();g.arc(sx,sy,25,0,Math.PI*2);g.fillStyle=COLORS.startPin;g.fill();
-    g.strokeStyle=ring;g.lineWidth=5;g.stroke();
+    g.beginPath();g.arc(sx,sy,25,0,Math.PI*2);g.fillStyle=MAPC.startPin;g.fill();
+    g.strokeStyle='#fff';g.lineWidth=5;g.stroke();
     g.fillStyle='#fff';g.font='600 20px "IBM Plex Sans KR", sans-serif';
     g.textAlign='center';g.textBaseline='middle';g.fillText('출발',sx,sy+1);
-
     const dist=(r.realDistanceM?r.realDistanceM/1000:r.km).toFixed(1);
     const time=fmtMin((r.realDurationMin??r.walkTotal)+r.stayTotal);
     const y0=ch,pad=34;
@@ -1106,15 +1581,12 @@ async function downloadImage(){
     g.fillText(`${dist}km · ${time} · 스팟 ${r.stops.length}곳 · ${PACE[cfg.pace].label}`,pad,y0+112);
     g.fillStyle='rgba(255,255,255,.45)';g.font='400 20px "IBM Plex Sans KR", sans-serif';
     g.fillText('걸음뽑기 · 지도 © OpenStreetMap 기여자, Geoapify',pad,y0+156);
-
     cv.toBlob(b=>{
       if(!b){toast('이미지를 저장하지 못했어요');return}
       const a=document.createElement('a');
-      a.href=URL.createObjectURL(b);
-      a.download=`걸음뽑기_${start.name}_${dist}km.png`;a.click();
+      a.href=URL.createObjectURL(b);a.download=`걸음뽑기_${start.name}_${dist}km.png`;a.click();
       setTimeout(()=>URL.revokeObjectURL(a.href),4000);
-      toast('이미지를 저장했어요');
-    },'image/png');
+      toast('이미지를 저장했어요')},'image/png');
   }catch(e){toast(`이미지를 만들지 못했어요 — ${e.message}`,5000)}
 }
 
@@ -1151,13 +1623,10 @@ function anchorCard(kind){
 }
 function renderResults(){
   const el=document.getElementById('results');
-  if(!routes.length){el.innerHTML='';renderStatus();return}
+  if(!routes.length){el.innerHTML='';renderStatus();updateMetricFloat();requestAnimationFrame(updateSheetVar);return}
   const r=routes[selected];
   const distKm=r.realDistanceM?r.realDistanceM/1000:r.km;
   const walkM=r.realDurationMin??r.walkTotal;
-  const food=r.stops.find(s=>s.type==='food');
-  const last=r.stops[r.stops.length-1];
-  const ov=Math.round((r.overlap||0)*100);
   let h='';
   if(routes.length>1){
     h+=`<div class="routepick">`+routes.map((x,i)=>{
@@ -1165,8 +1634,7 @@ function renderResults(){
       const t=fmtMin((x.realDurationMin??x.walkTotal)+x.stayTotal);
       return `<button class="routebtn ${i===selected?'on':''}" data-route="${i}">
         <strong>${ROUTE_LABELS[i]||`${i+1} 코스`}</strong><span>${d}km · ${t}</span>
-        <span>스팟 ${x.stops.length}곳 · 겹침 ${Math.round((x.overlap||0)*100)}%</span></button>`;
-    }).join('')+`</div>`;
+        <span>스팟 ${x.stops.length}곳 · 겹침 ${Math.round((x.overlap||0)*100)}%</span></button>`}).join('')+`</div>`;
   }
   h+=`<div class="summary-dark">
     <div class="metrics">
@@ -1174,15 +1642,9 @@ function renderResults(){
       <div><span>시간</span><b>${fmtMin(walkM+r.stayTotal)}</b></div>
       <div><span>스팟</span><b>${r.stops.length}</b></div>
     </div>
-    <p>${esc(start.name)}에서 출발해${food?` ${esc(food.name)}에서 한 번 쉬고,`:''} ${last?esc(last.name)+'을(를) 지나 ':''}다시 ${esc(start.name)}으로 돌아옵니다.</p>
-    <div class="bullet"><i>✓</i><span>${PACE[cfg.pace].label} · 걷기 ${fmtMin(walkM)} · 머무름 ${fmtMin(r.stayTotal)}</span></div>
-    <div class="bullet"><i>${ov<=10?'✓':'!'}</i><span>${ov<=10?`같은 길을 거의 다시 걷지 않아요 (겹침 ${ov}%)`:`왔던 길이 ${ov}% 겹칩니다`}</span></div>
-    <div class="darkacts">
-      <button class="btn btn-on-dark" id="againTop">다시 뽑기</button>
-      <button class="btn btn-ghost-dark" id="dlBtn">이미지로 저장</button>
-    </div>
+    ${summaryDetailHTML(r)}
   </div>`;
-  h+=`<p class="dragnote"><i class="fa-solid fa-grip-vertical"></i> 손잡이를 끌어 순서를 바꿀 수 있어요</p>`;
+  h+=`<p class="dragnote"><i class="fa-solid fa-grip-vertical"></i> 손잡이를 끌거나 위/아래 버튼으로 순서를 바꿀 수 있어요</p>`;
   h+=anchorCard('start');
   r.stops.forEach((s,i)=>{
     const isFood=s.type==='food',n=notes[s.id],open=openIdx===i;
@@ -1190,7 +1652,7 @@ function renderResults(){
     const label=isFood?KIND[s.kind].label:(s.custom?'직접 추가':(CAT[s.cat]?.label||'스팟'));
     h+=`<div class="card" data-idx="${i}" draggable="true">
       <div class="chead">
-        <button class="grip" data-grip="${i}" title="끌어서 순서 변경"><i class="fa-solid fa-grip-vertical"></i></button>
+        <button class="grip" title="끌어서 순서 변경"><i class="fa-solid fa-grip-vertical"></i></button>
         <span class="num" style="background:${color}">${i+1}</span>
         <button class="cbody" data-toggle="${i}">
           <span class="cname">${esc(s.name)}</span>
@@ -1223,7 +1685,6 @@ function renderResults(){
   });
   h+=anchorCard('finish');
   h+=`<div class="addrow"><button class="addbtn" id="addSpotInline"><i class="fa-solid fa-plus"></i> 원하는 스팟 직접 추가</button></div>`;
-  h+=`<button class="btn btn-secondary" id="againBottom">전부 다시 뽑기</button>`;
   el.innerHTML=h;
 
   el.querySelectorAll('[data-route]').forEach(b=>b.addEventListener('click',()=>{
@@ -1237,19 +1698,16 @@ function renderResults(){
   el.querySelectorAll('[data-photo]').forEach(i=>i.addEventListener('change',()=>addPhoto(i.dataset.photo,i.files)));
   el.querySelectorAll('[data-memo]').forEach(t=>t.addEventListener('input',()=>{
     notes[t.dataset.memo]=notes[t.dataset.memo]||{memo:'',photos:[]};notes[t.dataset.memo].memo=t.value}));
-  const at=document.getElementById('againTop'),ab=document.getElementById('againBottom'),
-        dl=document.getElementById('dlBtn'),ai=document.getElementById('addSpotInline');
-  if(at)at.addEventListener('click',roll);
-  if(ab)ab.addEventListener('click',roll);
-  if(dl)dl.addEventListener('click',downloadImage);
+  el.querySelectorAll('[data-dl]').forEach(b=>b.addEventListener('click',downloadImage));
+  const ai=document.getElementById('addSpotInline');
   if(ai)ai.addEventListener('click',()=>{
     addMode=true;pickMode=false;
     document.getElementById('addSpotBtn').classList.add('on');
     document.getElementById('pinBtn').classList.remove('on');
-    toast('코스에 넣고 싶은 곳을 지도에서 눌러 주세요',4000);
-    document.querySelector('.mapwrap').scrollIntoView({behavior:'smooth',block:'center'});
-  });
-  bindDrag(el);renderStatus();
+    if(isMobile())setSheetHeight(snapPoints().collapsed);
+    toast('코스에 넣고 싶은 곳을 지도에서 눌러 주세요',4000)});
+  bindDrag(el);renderStatus();updateMetricFloat();
+  requestAnimationFrame(updateSheetVar);
 }
 
 /* ---------- 드래그 순서 변경 ---------- */
@@ -1259,8 +1717,7 @@ function bindDrag(root){
     card.addEventListener('dragstart',e=>{
       dragFrom=+card.dataset.idx;card.classList.add('dragging');
       e.dataTransfer.effectAllowed='move';
-      try{e.dataTransfer.setData('text/plain',String(dragFrom))}catch(_){}
-    });
+      try{e.dataTransfer.setData('text/plain',String(dragFrom))}catch(_){}});
     card.addEventListener('dragend',()=>{card.classList.remove('dragging');
       root.querySelectorAll('.card').forEach(c=>c.classList.remove('dragover'))});
     card.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect='move';
@@ -1276,8 +1733,7 @@ function bindDrag(root){
 /* ---------- 시작 ---------- */
 document.getElementById('rollBtn').addEventListener('click',roll);
 startMarker.bindPopup(`<strong>${esc(start.name)}</strong><br/>출발 · 도착`);
-drawRadius();renderSnippet();renderStatus();loadPlaces();
-window.addEventListener('resize',()=>setTimeout(()=>map.invalidateSize(),200));
+drawRadius();renderSnippet();renderStatus();applyLayout();loadPlaces();
 </script>
 </body>
 </html>
