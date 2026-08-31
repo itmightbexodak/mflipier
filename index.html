@@ -888,7 +888,7 @@ if(isNativeApp){
     if(!raw||raw===lastRaw)return;
     lastRaw=raw;
     try{applyNativePayload(JSON.parse(raw))}catch(e){/* JSON이 아니면 무시 */}
-  },200);
+  },5);
 }
 /* 네이티브가 직접 호출할 수도 있게 열어 둔다 */
 window.RandomWalk={
