@@ -73,6 +73,7 @@ button{cursor:pointer;border:0;background:none}
 .brand .wm small{display:block;font-family:var(--f-body);font-weight:400;font-size:10px;letter-spacing:.18em;color:var(--mute);margin-top:3px}
 
 .searchwrap{position:relative;margin-top:0}
+#destWrap{margin-top:8px}
 .searchbar{display:flex;align-items:center;gap:7px;height:44px;padding:0 6px 0 16px;background:var(--surface-soft);
   border:1px solid transparent;border-radius:var(--r-full);transition:.14s}
 .searchbar:focus-within{background:var(--canvas);border-color:var(--hairline-strong)}
@@ -243,6 +244,7 @@ textarea:focus{border-color:var(--ink)}
   color:var(--ink);font-size:16px;box-shadow:var(--shadow)}
 
 .floatbtn.on{background:var(--primary);border-color:var(--primary);color:#fff}
+#meBtn{bottom:282px}
 #gpsBtn{bottom:226px} #locateBtn{bottom:170px} #addSpotBtn{bottom:114px}
 .leaflet-control-zoom{border:0!important;margin:0 16px 16px 0!important}
 .leaflet-control-zoom a{width:44px!important;height:44px!important;line-height:42px!important;background:var(--canvas)!important;
@@ -258,6 +260,16 @@ textarea:focus{border-color:var(--ink)}
 .mappin{display:flex;align-items:flex-end;justify-content:center;width:100%;height:100%;font-size:34px;
   filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))}
 .arrow{display:flex;align-items:center;justify-content:center;width:100%;height:100%}
+
+/* 네이티브 앱(randomwalkinapp)에서만 쓰는 실시간 위치 · 방향 표시 */
+.me-dot{position:relative;width:100%;height:100%}
+.me-core{position:absolute;left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;
+  border-radius:50%;background:#3B82F6;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)}
+.me-cone{position:absolute;left:50%;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;
+  transform-origin:50% 50%;pointer-events:none}
+.me-cone::before{content:'';position:absolute;left:50%;top:-2px;width:0;height:0;
+  margin-left:-9px;border-left:9px solid transparent;border-right:9px solid transparent;
+  border-bottom:15px solid rgba(59,130,246,.38)}
 .leaflet-popup-content-wrapper{border-radius:var(--r-lg);border:1px solid var(--hairline);box-shadow:var(--shadow);
   background:var(--canvas);color:var(--ink)}
 .leaflet-popup-content{font-family:var(--f-body);font-size:13px;margin:11px 14px}
@@ -386,7 +398,9 @@ textarea:focus{border-color:var(--ink)}
     border-top:1px solid var(--hairline);flex:none}
   .sheet-foot .btn{height:46px}
   .sheet.collapsed .sheet-body,.sheet.collapsed .sheet-foot{display:none}
-  .sheet.collapsed .snippet{margin-bottom:calc(10px + env(safe-area-inset-bottom))}
+  /* 최대로 접으면 조건 요약 줄도 감춘다 */
+  .sheet.collapsed .snippet{display:none}
+  .sheet.collapsed .sheet-head{padding-bottom:14px}
 
   .sec{margin-bottom:var(--sp-lg)}
   .hero{padding:var(--sp-sm) 0 var(--sp-lg)}
@@ -399,6 +413,7 @@ textarea:focus{border-color:var(--ink)}
   .leaflet-control-zoom{display:none!important}
   /* 시트 윗면을 기준선으로 삼아 지도 위 요소가 함께 따라 움직인다.
      워터마크는 버튼들보다 낮은 자리(맨 아래)에 둔다. */
+  #meBtn{bottom:calc(var(--sheet-top) + 234px)}
   #gpsBtn{bottom:calc(var(--sheet-top) + 178px)}
   #locateBtn{bottom:calc(var(--sheet-top) + 122px)}
   #addSpotBtn{bottom:calc(var(--sheet-top) + 66px)}
@@ -471,6 +486,15 @@ textarea:focus{border-color:var(--ink)}
         </div>
         <div class="suggest" id="suggest" style="display:none"></div>
       </div>
+      <div class="searchwrap" id="destWrap" style="display:none">
+        <div class="searchbar">
+          <i class="fa-solid fa-flag-checkered" style="color:var(--mute);font-size:13px"></i>
+          <input id="qDest" type="text" placeholder="도착지 검색" autocomplete="off" />
+          <button class="icobtn" id="destPinBtn" title="지도에서 도착지 고르기"><i class="fa-solid fa-location-dot"></i></button>
+          <button class="icobtn" id="destClearBtn" title="도착지 지우기"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="suggest" id="suggestDest" style="display:none"></div>
+      </div>
     </div>
 
     <div class="sheet" id="sheet">
@@ -495,29 +519,33 @@ textarea:focus{border-color:var(--ink)}
             <div class="sub">RANDOM WALK</div>
           </div>
           <h1>오늘은 어디로 걸을까요?</h1>
-          <p>출발지에서 시작해 다시 출발지로 돌아오는<br/>순환 코스를 여러 개 뽑아 드려요.</p>
+          <p>정한 출발지와 원하는 장소를 방문하는<br/>걷기 코스를 여러 개 뽑아 드려요.</p>
         </div>
 
-        <div class="sec" data-step="1">
+        <div class="sec" data-step="2">
           <div class="lab"><span>걷는 방식</span></div>
           <div class="pacerow" id="paceRow"></div>
           <button class="toggle on" id="noBackBtn" aria-pressed="true">
             <span class="sw"></span>
             <span>왔던 길 되돌아가지 않기<small>한 방향으로 크게 돌아 출발지로 옵니다</small></span>
           </button>
+          <button class="toggle" id="diffEndBtn" aria-pressed="false">
+            <span class="sw"></span>
+            <span>도착지 다르게 설정하기<small>출발지로 돌아오지 않고 다른 곳에서 마칩니다</small></span>
+          </button>
         </div>
 
-        <div class="sec" data-step="2">
+        <div class="sec" data-step="3">
           <div class="lab"><span>걷고 싶은 시간</span><b id="minOut">1시간 30분</b></div>
           <input type="range" id="minutes" min="20" max="240" step="10" value="90" aria-label="걷고 싶은 시간" />
           <div class="ticks"><span>20분</span><span>4시간</span></div>
         </div>
-        <div class="sec" data-step="2">
+        <div class="sec" data-step="3">
           <div class="lab"><span>출발지에서 벗어날 범위</span><b id="radOut">1.4km</b></div>
           <input type="range" id="radius" min="0.4" max="3" step="0.1" value="1.4" aria-label="범위" />
           <div class="ticks"><span>0.4km</span><span>3.0km</span></div>
         </div>
-        <div class="sec" data-step="2">
+        <div class="sec" data-step="3">
           <div class="lab"><span>중간에 들를 스팟 수</span><b id="countOut">자동</b></div>
           <div class="countwrap">
             <div class="numfield">
@@ -529,12 +557,12 @@ textarea:focus{border-color:var(--ink)}
           </div>
         </div>
 
-        <div class="sec" data-step="3">
+        <div class="sec" data-step="4">
           <div class="lab"><span>보고 싶은 것</span><button class="link" id="clearInterests">모두 해제</button></div>
           <div class="chiprow" id="interestChips"></div>
         </div>
 
-        <div class="sec" data-step="4">
+        <div class="sec" data-step="5">
           <div class="lab"><span>쉬어 갈 곳</span></div>
           <div class="chiprow" id="kindChips"></div>
           <div class="sub" id="foodSub" style="display:none">
@@ -552,13 +580,13 @@ textarea:focus{border-color:var(--ink)}
           </div>
         </div>
 
-        <button class="btn btn-primary" id="rollBtn" data-step="4"><span class="die">◆</span><span id="rollLabel">코스 뽑기</span></button>
+        <button class="btn btn-primary" id="rollBtn" data-step="5"><span class="die">◆</span><span id="rollLabel">코스 뽑기</span></button>
 
-        <div class="results" id="results" data-step="5"></div>
-        <div class="status" id="status" data-step="5"></div>
-        <p class="foot" data-step="5">
+        <div class="results" id="results" data-step="6"></div>
+        <div class="status" id="status" data-step="6"></div>
+        <p class="foot" data-step="6">
           장소·경로·이미지 <a href="https://www.geoapify.com/" target="_blank" rel="noopener">Geoapify</a>,
-          지도 &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> 기여자, 개발·운영 puarr❤️.
+          지도 &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> 기여자, 운영·개발 puarr❤️
           평점·리뷰는 제공되지 않으며, 추천은 취향·동선·머무는 방식만으로 계산합니다.
         </p>
       </div>
@@ -573,6 +601,7 @@ textarea:focus{border-color:var(--ink)}
   <div class="mapwrap">
     <div id="map"></div>
     <div class="metricfloat" id="metricFloat"></div>
+    <button class="floatbtn" id="meBtn" title="내 위치로 이동" style="display:none"><i class="fa-solid fa-location-arrow"></i></button>
     <button class="floatbtn" id="gpsBtn" title="현재 위치"><i class="fa-solid fa-crosshairs"></i></button>
     <button class="floatbtn" id="locateBtn" title="출발지 보기"><i class="fa-solid fa-location-dot"></i></button>
     <button class="floatbtn" id="addSpotBtn" title="코스에 스팟 추가"><i class="fa-solid fa-plus"></i></button>
@@ -689,7 +718,8 @@ CUISINE_LABEL.vegan='비건';CUISINE_LABEL.vegetarian='비건';
 const PACE={hike:{label:'워킹 중심',sub:'많이 걷기',dwellMul:.45,pick:'far',maxStops:10},
   stroll:{label:'산책 중심',sub:'적당히 걷기',dwellMul:1,pick:'mid',maxStops:8},
   mill:{label:'마실 중심',sub:'적게 걷기',dwellMul:1.8,pick:'near',maxStops:6}};
-const STEPS=[null,'걷는 방식','얼마나 걸을까요?','무엇을 볼까요?','어디서 쉴까요?','오늘의 코스'];
+const STEPS=[null,'오늘의 산책','걷는 방식','얼마나 걸을까요?','무엇을 볼까요?','어디서 쉴까요?','오늘의 코스'];
+const LAST_STEP=6;
 
 /* ---------- 유틸 ---------- */
 const SPEED=70;
@@ -711,7 +741,7 @@ async function getJSON(url,timeout=12000){
   const ctrl=new AbortController(),t=setTimeout(()=>ctrl.abort(),timeout);
   try{
     const res=await fetch(url,{signal:ctrl.signal});clearTimeout(t);
-    if(!res.ok)throw new Error(res.status===401?'API 키가 거부됐어요':res.status===429?'오늘 API 사용량을 다 썼어요':`서버 응답 ${res.status}`);
+    if(!res.ok)throw new Error(res.status===401?'API 키가 거부됐어요':res.status===429?'오늘 무료 사용량을 다 썼어요':`서버 응답 ${res.status}`);
     return await res.json();
   }catch(e){clearTimeout(t);throw new Error(e.name==='AbortError'?'응답이 너무 느려요':(e.message||'요청 실패'))}
 }
@@ -733,12 +763,14 @@ const store={
 };
 
 /* ---------- 상태 ---------- */
-const cfg={pace:'stroll',minutes:90,radiusKm:1.4,stopCount:'auto',noBacktrack:true,
+const cfg={pace:'stroll',minutes:90,radiusKm:1.4,stopCount:'auto',noBacktrack:true,diffEnd:false,
   interests:new Set(['park','water','view','landmark']),
   stopKinds:new Set(['cafe']),cuisines:new Set(),turnover:'slow'};
 let start={lat:37.5570,lng:126.9245,name:'홍대입구'};
+let endPoint=null;                 // 도착지를 따로 쓸 때만 값이 있다
+const finishPt=()=>(cfg.diffEnd&&endPoint)?endPoint:start;
 let routes=[],selected=0,notes={},openIdx=null;
-let pickMode=false,addMode=false,step=1;
+let pickMode=false,addMode=false,destPickMode=false,step=1;
 let pool={sights:[],foods:[]},poolKey=null,dataState='idle',dataError='';
 let presets=store.get('walk.presets',[]);
 let themePref=store.get('walk.theme','system');
@@ -765,6 +797,16 @@ const mapPinIcon=color=>L.divIcon({className:'',
   html:`<div class="mappin" style="color:${color}"><i class="fa-solid fa-location-dot"></i></div>`,
   iconSize:[38,42],iconAnchor:[19,40],popupAnchor:[0,-36]});
 const startMarker=L.marker([start.lat,start.lng],{icon:mapPinIcon(MAPC.startPin),zIndexOffset:1000}).addTo(map);
+const flagIcon=L.divIcon({className:'',iconSize:[38,42],iconAnchor:[19,40],popupAnchor:[0,-36],
+  html:`<div class="mappin" style="color:${MAPC.custom}"><i class="fa-solid fa-flag-checkered"></i></div>`});
+let endMarker=null;
+function syncEndMarker(){
+  if(cfg.diffEnd&&endPoint){
+    if(!endMarker)endMarker=L.marker([endPoint.lat,endPoint.lng],{icon:flagIcon,zIndexOffset:1000}).addTo(map);
+    else endMarker.setLatLng([endPoint.lat,endPoint.lng]);
+    endMarker.bindPopup(`<strong>${esc(endPoint.name)}</strong><br/>도착지`);
+  }else if(endMarker){map.removeLayer(endMarker);endMarker=null}
+}
 const markersLayer=L.layerGroup().addTo(map);
 const routesLayer=L.layerGroup().addTo(map);
 const arrowsLayer=L.layerGroup().addTo(map);
@@ -794,6 +836,79 @@ function toast(msg,ms=3200){const t=document.getElementById('toast');t.textConte
   clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),ms)}
 
 /* ============================================================
+   네이티브 앱(User-Agent에 randomwalkinapp 포함) 전용:
+   - 기기가 바라보는 방향(Orientation Sensor)은 Kodular의 WebViewString으로 받는다.
+   - 실시간 위치는 Kodular을 거치지 않고 브라우저의 Geolocation API를 그대로 쓴다.
+
+   Kodular 블록에서 WebViewString에 아래 형태의 JSON 문자열을 넣어 주면 된다.
+     {"heading":87.3}
+   키 이름은 heading/bearing/azimuth/direction 중 아무거나 받아들인다.
+   WebViewString은 이벤트가 없어 값이 바뀌었는지 주기적으로 확인한다.
+   ============================================================ */
+const isNativeApp = /randomwalkinapp/i.test(navigator.userAgent);
+
+let myLoc=null, myHeading=null, myAccuracy=null;
+let meMarker=null, meAccuracyCircle=null;
+const meIcon=deg=>L.divIcon({className:'',iconSize:[34,34],iconAnchor:[17,17],
+  html:`<div class="me-dot">${deg!=null?`<div class="me-cone" style="transform:rotate(${deg}deg)"></div>`:''}<div class="me-core"></div></div>`});
+
+function renderMe(){
+  if(!myLoc)return;
+  const ll=[myLoc.lat,myLoc.lng];
+  if(!meMarker)meMarker=L.marker(ll,{icon:meIcon(myHeading),zIndexOffset:900,interactive:false}).addTo(map);
+  else{meMarker.setLatLng(ll);meMarker.setIcon(meIcon(myHeading))}
+  if(myAccuracy!=null&&myAccuracy>0){
+    if(!meAccuracyCircle)meAccuracyCircle=L.circle(ll,{radius:myAccuracy,color:'#3B82F6',weight:1,
+      opacity:.3,fillOpacity:.08,interactive:false}).addTo(map);
+    else{meAccuracyCircle.setLatLng(ll);meAccuracyCircle.setRadius(myAccuracy)}
+  }
+  const meBtn=document.getElementById('meBtn');
+  if(meBtn.style.display==='none')meBtn.style.display='flex';
+}
+function num(v){const n=Number(v);return Number.isFinite(n)?n:null}
+function applyNativePayload(data){
+  if(!data||typeof data!=='object')return;
+  // 방향은 Kodular(코듈러) 센서 값을 쓰고, 위치는 브라우저가 직접 인식한 값을 쓴다 (아래 watchPosition).
+  const h=num(data.heading??data.bearing??data.azimuth??data.direction);
+  if(h!=null)myHeading=((h%360)+360)%360;
+  renderMe();
+}
+function readWebViewString(){
+  try{
+    const src=(window.Kodular&&window.Kodular.getWebViewString)||
+              (window.AppInventor&&window.AppInventor.getWebViewString);
+    if(!src)return null;
+    return src.call(window.Kodular||window.AppInventor);
+  }catch(e){return null}
+}
+if(isNativeApp){
+  let lastRaw='';
+  setInterval(()=>{
+    const raw=readWebViewString();
+    if(!raw||raw===lastRaw)return;
+    lastRaw=raw;
+    try{applyNativePayload(JSON.parse(raw))}catch(e){/* JSON이 아니면 무시 */}
+  },200);
+}
+/* 네이티브가 직접 호출할 수도 있게 열어 둔다 */
+window.RandomWalk={
+  update(json){try{applyNativePayload(typeof json==='string'?JSON.parse(json):json)}catch(e){}},
+  updateHeading(deg){applyNativePayload({heading:deg})},
+};
+
+/* 위치는 Kodular이 아니라 브라우저가 직접 인식한 실시간 위치를 쓴다 */
+if(isNativeApp&&navigator.geolocation){
+  navigator.geolocation.watchPosition(pos=>{
+    myLoc={lat:pos.coords.latitude,lng:pos.coords.longitude};
+    myAccuracy=pos.coords.accuracy;
+    renderMe();
+  },err=>{
+    console.warn('실시간 위치를 가져오지 못했어요',err.message);
+  },{enableHighAccuracy:true,maximumAge:2000,timeout:8000});
+}
+document.getElementById('meBtn').addEventListener('click',()=>{if(myLoc)centerOn(myLoc,16)});
+
+/* ============================================================
    단계형 UI (모바일)
    ============================================================ */
 function updateSheetVar(){
@@ -811,7 +926,8 @@ function summaryDetailHTML(r){
   const walkM=r.realDurationMin??r.walkTotal;
   const food=r.stops.find(s=>s.type==='food'),last=r.stops[r.stops.length-1];
   const ov=Math.round((r.overlap||0)*100);
-  return `<p>${esc(start.name)}에서 출발해${food?` ${esc(food.name)}에서 한 번 쉬고,`:''} ${last?esc(last.name)+'을(를) 지나 ':''}다시 ${esc(start.name)}으로 돌아옵니다.</p>
+  const fin=finishPt(), loop=!(cfg.diffEnd&&endPoint);
+  return `<p>${esc(start.name)}에서 출발해${food?` ${esc(food.name)}에서 한 번 쉬고,`:''} ${last?esc(last.name)+'을(를) 지나 ':''}${loop?`다시 ${esc(start.name)}으로 돌아옵니다.`:`${esc(fin.name)}에서 마칩니다.`}</p>
     <div class="bullet"><i>✓</i><span>${PACE[cfg.pace].label} · 걷기 ${fmtMin(walkM)} · 머무름 ${fmtMin(r.stayTotal)}</span></div>
     <div class="bullet"><i>${ov<=10?'✓':'!'}</i><span>${ov<=10?`같은 길을 거의 다시 걷지 않아요 (겹침 ${ov}%)`:`왔던 길이 ${ov}% 겹칩니다`}</span></div>
     <div class="darkacts"><button class="btn btn-ghost-dark" data-dl="1">이미지로 저장</button></div>`;
@@ -828,7 +944,7 @@ let metricCompact=false;
 function updateMetricFloat(){
   const el=document.getElementById('metricFloat');
   const r=routes[selected];
-  if(!isMobile()||step!==5||!r){el.classList.remove('show');return}
+  if(!isMobile()||step!==LAST_STEP||!r){el.classList.remove('show');return}
   // 내용은 항상 그려 두고 접힘/펼침은 클래스로만 바꾼다 (전환이 끊기지 않도록)
   el.innerHTML=`<div class="mrow">${metricRowHTML(r)}</div>`
     +`<div class="mdetail">${summaryDetailHTML(r)}</div>`;
@@ -851,18 +967,18 @@ document.addEventListener('pointerdown',e=>{
 },true);
 function showStep(n,dir){
   const from=step;
-  step=Math.max(1,Math.min(5,n));
+  step=Math.max(1,Math.min(LAST_STEP,n));
   document.getElementById('stepTitle').textContent=STEPS[step];
-  document.getElementById('stepDots').innerHTML=[1,2,3,4,5].map(i=>`<i class="${i===step?'on':''}"></i>`).join('');
+  document.getElementById('stepDots').innerHTML=Array.from({length:LAST_STEP},(_,i)=>i+1).map(i=>`<i class="${i===step?'on':''}"></i>`).join('');
   document.querySelectorAll('[data-step]').forEach(el=>{
     el.style.display=(!isMobile()||+el.dataset.step===step)?'':'none'});
   if(!isMobile())document.querySelectorAll('[data-step]').forEach(el=>el.style.display='');
   const prev=document.getElementById('stepPrev'),next=document.getElementById('stepNext');
   prev.style.display=step===1?'none':'';
-  if(step===4)next.innerHTML='<span class="die">◆</span> 코스 뽑기';
-  else if(step===5){prev.style.display='';prev.textContent='조건 바꾸기';next.textContent='다시 뽑기'}
+  if(step===LAST_STEP-1)next.innerHTML='<span class="die">◆</span> 코스 뽑기';
+  else if(step===LAST_STEP){prev.style.display='';prev.textContent='조건 바꾸기';next.textContent='다시 뽑기'}
   else next.textContent='다음';
-  if(step!==5&&step!==1)prev.textContent='이전';
+  if(step!==LAST_STEP&&step!==1)prev.textContent='이전';
 
   sheetEl.classList.remove('collapsed');
   document.querySelector('#sheetToggle i').className='fa-solid fa-chevron-down';
@@ -878,20 +994,20 @@ function showStep(n,dir){
     body.addEventListener('animationend',()=>body.classList.remove(cls),{once:true});
   }
   document.getElementById('sheetBody').scrollTop=0;
-  if(isMobile())setSheetHeight(step===5?snapPoints().full:snapPoints().mid);
+  if(isMobile())setSheetHeight(step===LAST_STEP?snapPoints().full:snapPoints().mid);
   requestAnimationFrame(updateSheetVar);
 }
 document.getElementById('stepPrev').addEventListener('click',()=>{
-  if(step===5)showStep(4,'prev');else showStep(step-1,'prev')});
+  if(step===LAST_STEP)showStep(LAST_STEP-1,'prev');else showStep(step-1,'prev')});
 document.getElementById('stepNext').addEventListener('click',()=>{
-  if(step===4||step===5)roll();else showStep(step+1,'next')});
+  if(step>=LAST_STEP-1)roll();else showStep(step+1,'next')});
 
 /* ---------- 바텀시트 높이 · 손잡이 드래그 ---------- */
+/* 최대로 접었을 때 높이 — 손잡이와 제목 줄만 남는다 (요약 줄은 숨김) */
 function headerH(){
   const grab=document.getElementById('grabZone').offsetHeight;
   const head=sheetEl.querySelector('.sheet-head').offsetHeight;
-  const snip=sheetEl.querySelector('.snippet').offsetHeight;
-  return grab+head+snip+18;
+  return grab+head+14;
 }
 function snapPoints(){
   const vh=window.innerHeight;
@@ -1057,6 +1173,36 @@ noBackBtn.addEventListener('click',()=>{
   noBackBtn.classList.toggle('on',cfg.noBacktrack);
   noBackBtn.setAttribute('aria-pressed',String(cfg.noBacktrack));renderSnippet()});
 
+const diffEndBtn=document.getElementById('diffEndBtn');
+function syncDiffEnd(){
+  diffEndBtn.classList.toggle('on',cfg.diffEnd);
+  diffEndBtn.setAttribute('aria-pressed',String(cfg.diffEnd));
+  document.getElementById('destWrap').style.display=cfg.diffEnd?'block':'none';
+  // 도착지를 따로 쓰면 '되돌아가지 않기'는 의미가 없어 잠근다
+  noBackBtn.style.opacity=cfg.diffEnd?'.45':'';
+  noBackBtn.style.pointerEvents=cfg.diffEnd?'none':'';
+  syncEndMarker();renderSnippet();
+  requestAnimationFrame(updateSheetVar);
+}
+diffEndBtn.addEventListener('click',()=>{
+  cfg.diffEnd=!cfg.diffEnd;
+  if(!cfg.diffEnd){endPoint=null;document.getElementById('qDest').value=''}
+  routes=[];clearMapLayers();renderResults();syncDiffEnd();
+  if(cfg.diffEnd)toast('도착지를 검색하거나 지도에서 골라 주세요');
+});
+document.getElementById('destClearBtn').addEventListener('click',()=>{
+  endPoint=null;document.getElementById('qDest').value='';
+  routes=[];clearMapLayers();renderResults();syncEndMarker();renderSnippet();
+});
+document.getElementById('destPinBtn').addEventListener('click',()=>{
+  destPickMode=!destPickMode;pickMode=false;addMode=false;
+  document.getElementById('destPinBtn').classList.toggle('on',destPickMode);
+  document.getElementById('pinBtn').classList.remove('on');
+  document.getElementById('addSpotBtn').classList.remove('on');
+  if(destPickMode&&isMobile())setSheetHeight(snapPoints().collapsed);
+  toast(destPickMode?'지도를 눌러 도착지를 골라 주세요':'도착지 고르기를 껐어요');
+});
+
 const cntInput=document.getElementById('cntInput'),cntAuto=document.getElementById('cntAuto'),cntOut=document.getElementById('countOut');
 function syncCount(){
   const auto=cfg.stopCount==='auto';
@@ -1118,7 +1264,7 @@ function renderSnippet(){
   const ints=[...cfg.interests].map(k=>CAT[k].label);
   const stops=[...cfg.stopKinds].map(k=>KIND[k].label);
   document.getElementById('snippet').innerHTML=
-    `<i class="fa-solid fa-route"></i><span>${esc(start.name)} <span class="dim">·</span> ${PACE[cfg.pace].label}${cfg.noBacktrack?' <span class="dim">·</span> 한바퀴':''} <span class="dim">·</span> ${fmtMin(cfg.minutes)} <span class="dim">·</span> ${cfg.radiusKm.toFixed(1)}km <span class="dim">·</span> 스팟 ${cfg.stopCount==='auto'?'자동':cfg.stopCount}`
+    `<i class="fa-solid fa-route"></i><span>${esc(start.name)}${(cfg.diffEnd&&endPoint)?` <span class="dim">→</span> ${esc(endPoint.name)}`:''} <span class="dim">·</span> ${PACE[cfg.pace].label}${(cfg.noBacktrack&&!(cfg.diffEnd&&endPoint))?' <span class="dim">·</span> 한바퀴':''} <span class="dim">·</span> ${fmtMin(cfg.minutes)} <span class="dim">·</span> ${cfg.radiusKm.toFixed(1)}km <span class="dim">·</span> 스팟 ${cfg.stopCount==='auto'?'자동':cfg.stopCount}`
     +(ints.length?` <span class="dim">·</span> ${ints.slice(0,3).join(' ')}${ints.length>3?` +${ints.length-3}`:''}`:'')
     +(stops.length?` <span class="dim">+</span> ${stops.join(' ')}`:'')+`</span>`;
 }
@@ -1126,26 +1272,39 @@ function renderSnippet(){
 /* ============================================================
    검색 / 출발지
    ============================================================ */
-const qEl=document.getElementById('q'),suggestEl=document.getElementById('suggest');
-let searchTimer=null;
-qEl.addEventListener('input',()=>{clearTimeout(searchTimer);
-  const q=qEl.value.trim();if(q.length<2){suggestEl.style.display='none';return}
-  searchTimer=setTimeout(()=>doSearch(q),350)});
-async function doSearch(q){
-  suggestEl.innerHTML=`<button disabled style="color:var(--mute);cursor:default"><div class="nm">찾는 중…</div></button>`;
-  suggestEl.style.display='block';
-  try{
-    const d=await getJSON(`${API.autocomplete}?text=${encodeURIComponent(q)}&filter=countrycode:kr&lang=ko&limit=6&apiKey=${GEOAPIFY_KEY}`,8000);
-    if(qEl.value.trim()!==q)return;
-    const items=(d.features||[]).map(f=>({name:f.properties.name||f.properties.address_line1,
-      region:f.properties.address_line2||f.properties.formatted||'',lat:f.properties.lat,lng:f.properties.lon}));
-    if(!items.length){suggestEl.innerHTML=`<button disabled style="color:var(--mute);cursor:default"><div class="nm">일치하는 곳이 없어요</div></button>`;return}
-    suggestEl.innerHTML=items.map((p,i)=>`<button data-i="${i}"><div class="nm">${esc(p.name)}</div><div class="rg">${esc(p.region)}</div></button>`).join('');
-    suggestEl.querySelectorAll('button[data-i]').forEach(b=>b.addEventListener('click',()=>{
-      const p=items[+b.dataset.i];setStart(p);qEl.value=p.name;suggestEl.style.display='none';qEl.blur()}));
-  }catch(e){suggestEl.innerHTML=`<button disabled style="color:var(--mute);cursor:default"><div class="nm">검색에 실패했어요</div><div class="rg">${esc(e.message)}</div></button>`}
+/* 출발지·도착지 검색을 같은 코드로 처리한다 */
+function wireSearch(inputId,boxId,onPick){
+  const inp=document.getElementById(inputId),box=document.getElementById(boxId);
+  let timer=null;
+  const msg=(t,sub)=>{box.innerHTML=`<button disabled style="color:var(--mute);cursor:default"><div class="nm">${esc(t)}</div>${sub?`<div class="rg">${esc(sub)}</div>`:''}</button>`;box.style.display='block'};
+  inp.addEventListener('input',()=>{
+    clearTimeout(timer);
+    const q=inp.value.trim();
+    if(q.length<2){box.style.display='none';return}
+    timer=setTimeout(async()=>{
+      msg('찾는 중…');
+      try{
+        const d=await getJSON(`${API.autocomplete}?text=${encodeURIComponent(q)}&filter=countrycode:kr&lang=ko&limit=6&apiKey=${GEOAPIFY_KEY}`,8000);
+        if(inp.value.trim()!==q)return;
+        const items=(d.features||[]).map(f=>({name:f.properties.name||f.properties.address_line1,
+          region:f.properties.address_line2||f.properties.formatted||'',lat:f.properties.lat,lng:f.properties.lon}));
+        if(!items.length){msg('일치하는 곳이 없어요');return}
+        box.innerHTML=items.map((p,i)=>`<button data-i="${i}"><div class="nm">${esc(p.name)}</div><div class="rg">${esc(p.region)}</div></button>`).join('');
+        box.style.display='block';
+        box.querySelectorAll('button[data-i]').forEach(b=>b.addEventListener('click',()=>{
+          const p=items[+b.dataset.i];onPick(p);inp.value=p.name;box.style.display='none';inp.blur()}));
+      }catch(e){msg('검색에 실패했어요',e.message)}
+    },350);
+  });
+  return inp;
 }
-document.addEventListener('click',e=>{if(!e.target.closest('.searchwrap'))suggestEl.style.display='none'});
+const qEl=wireSearch('q','suggest',p=>setStart(p));
+wireSearch('qDest','suggestDest',p=>setEnd(p));
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.searchwrap')){
+    document.getElementById('suggest').style.display='none';
+    document.getElementById('suggestDest').style.display='none';
+  }});
 
 const nearbyEl=document.getElementById('nearby'),nearbyList=document.getElementById('nearbyList');
 let pendingLatLng=null,nearbyMode='start';
@@ -1164,6 +1323,7 @@ document.getElementById('addSpotBtn').addEventListener('click',()=>{
   toast(addMode?'코스에 넣고 싶은 곳을 지도에서 눌러 주세요':'스팟 추가를 껐어요')});
 map.on('click',e=>{
   if(pickMode)openNearby(e.latlng,'start','이 근처에서 출발','누른 지점에서 가까운 장소예요. 하나를 고르면 출발지가 맞춰집니다.');
+  else if(destPickMode)openNearby(e.latlng,'end','이 근처에서 도착','누른 지점에서 가까운 장소예요. 하나를 고르면 도착지가 맞춰집니다.');
   else if(addMode)openNearby(e.latlng,'add','코스에 스팟 추가','고른 곳이 동선상 가장 자연스러운 위치에 끼워집니다.')});
 
 async function openNearby(latlng,mode,title,hint){
@@ -1194,15 +1354,24 @@ async function openNearby(latlng,mode,title,hint){
     `<li><button data-i="${i}"><span><span class="nm">${esc(p.name)}</span><br/><span class="rg">${esc(p.region)}</span></span><span class="dd">${p.exact?'이 지점':fmtDist(p.d)}</span></button></li>`).join('');
   nearbyList.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
     const p=uniq[+b.dataset.i];
-    if(nearbyMode==='add')insertCustomSpot(p);else setStart(p);
+    if(nearbyMode==='add')insertCustomSpot(p);
+    else if(nearbyMode==='end')setEnd(p);
+    else setStart(p);
     closeNearby()}));
 }
-function closeNearby(){nearbyEl.classList.remove('show');pendingLatLng=null;pickMode=false;addMode=false;
-  document.getElementById('pinBtn').classList.remove('on');document.getElementById('addSpotBtn').classList.remove('on')}
+function closeNearby(){nearbyEl.classList.remove('show');pendingLatLng=null;
+  pickMode=false;addMode=false;destPickMode=false;
+  document.getElementById('pinBtn').classList.remove('on');
+  document.getElementById('addSpotBtn').classList.remove('on');
+  document.getElementById('destPinBtn').classList.remove('on')}
 document.getElementById('cancelNearby').addEventListener('click',closeNearby);
 document.getElementById('useExact').addEventListener('click',()=>{
-  if(pendingLatLng){const p={...pendingLatLng,name:nearbyMode==='add'?'직접 고른 지점':'선택한 지점'};
-    if(nearbyMode==='add')insertCustomSpot(p);else setStart(p)}
+  if(pendingLatLng){
+    const p={...pendingLatLng,name:nearbyMode==='add'?'직접 고른 지점':nearbyMode==='end'?'선택한 도착지':'선택한 지점'};
+    if(nearbyMode==='add')insertCustomSpot(p);
+    else if(nearbyMode==='end')setEnd(p);
+    else setStart(p);
+  }
   closeNearby()});
 document.getElementById('locateBtn').addEventListener('click',()=>centerOn(start,15.3));
 function useCurrentLocation(){
@@ -1220,10 +1389,18 @@ document.getElementById('gpsBtn').addEventListener('click',useCurrentLocation);
 document.getElementById('gpsBtnPanel').addEventListener('click',useCurrentLocation);
 function setStart(p,fly){
   start={lat:p.lat,lng:p.lng,name:p.name||'선택한 지점'};
-  startMarker.setLatLng([start.lat,start.lng]).bindPopup(`<strong>${esc(start.name)}</strong><br/>출발 · 도착`);
+  startMarker.setLatLng([start.lat,start.lng])
+    .bindPopup(`<strong>${esc(start.name)}</strong><br/>${(cfg.diffEnd&&endPoint)?'출발지':'출발 · 도착'}`);
   drawRadius();poolKey=null;routes=[];openIdx=null;
   clearMapLayers();renderResults();renderSnippet();
   if(fly!==false)centerOn(start,15.3);
+}
+function setEnd(p,fly){
+  endPoint={lat:p.lat,lng:p.lng,name:p.name||'선택한 도착지'};
+  syncEndMarker();routes=[];openIdx=null;
+  clearMapLayers();renderResults();renderSnippet();
+  startMarker.bindPopup(`<strong>${esc(start.name)}</strong><br/>출발지`);
+  if(fly!==false)centerOn(endPoint,15.3);
 }
 
 /* ============================================================
@@ -1303,7 +1480,7 @@ function buildStopsLoop(){
     bucket.sort((a,b)=>metersBetween(a,cur)-metersBetween(b,cur));
     const pickFrom=bucket.slice(0,Math.min(3,bucket.length));
     const next=pickFrom[Math.floor(Math.random()*pickFrom.length)];
-    const leg=walkMin(metersBetween(next,cur)),back=walkMin(metersBetween(next,start));
+    const leg=walkMin(metersBetween(next,cur)),back=walkMin(metersBetween(next,finishPt()));
     if(!sightTarget&&used+leg+next.dwell+back>budget*(1-reserve)+6)break;
     used+=leg+next.dwell;stops.push(next);lastAng=next.ang;cur=next;
   }
@@ -1326,7 +1503,7 @@ function buildStopsNearest(){
     else slice=cand.slice(0,Math.min(5,cand.length));
     if(!slice.length)slice=cand.slice(0,1);
     const next=slice[Math.floor(Math.random()*slice.length)];
-    const leg=walkMin(metersBetween(next,cur)),back=walkMin(metersBetween(next,start));
+    const leg=walkMin(metersBetween(next,cur)),back=walkMin(metersBetween(next,finishPt()));
     if(!sightTarget&&used+leg+next.dwell+back>budget*(1-reserve)+6)break;
     used+=leg+next.dwell;stops.push(next);cur=next;
     cand.splice(cand.indexOf(next),1);
@@ -1334,8 +1511,44 @@ function buildStopsNearest(){
   }
   return stops;
 }
+/* 도착지가 따로 있을 때: 출발→도착 축을 따라 앞으로 나아가며 고른다 */
+function buildStopsCorridor(){
+  const P=PACE[cfg.pace];
+  const wantFood=cfg.stopKinds.size&&pool.foods.length;
+  const target=cfg.stopCount==='auto'?null:cfg.stopCount;
+  const sightTarget=target?Math.max(1,target-(wantFood?1:0)):null;
+  const fin=finishPt();
+  const axis=metersBetween(start,fin);
+  const cand=pool.sights.map(s=>{
+    const ds=metersBetween(start,s), df=metersBetween(s,fin);
+    // 축 위로 얼마나 나아갔는지(t)와 축에서 얼마나 벗어났는지(off)
+    const t=axis>1?(ds*ds-df*df+axis*axis)/(2*axis):0;
+    const off=Math.sqrt(Math.max(0,ds*ds-t*t));
+    return{...s,dwell:Math.max(4,Math.round(s.dwell*P.dwellMul)),t,off};
+  }).filter(s=>s.off<=cfg.radiusKm*1000).sort((a,b)=>a.t-b.t);
+  if(!cand.length)return[];
+  const stops=[];let cur={...start},used=0,lastT=-Infinity;
+  const budget=cfg.minutes,reserve=.16,cap=sightTarget||P.maxStops;
+  const slots=Math.min(cap,cand.length);
+  for(let i=0;i<slots;i++){
+    const lo=axis*(i/slots),hi=axis*((i+1)/slots);
+    let bucket=cand.filter(s=>s.t>=lo&&s.t<hi&&s.t>lastT&&!stops.includes(s));
+    if(!bucket.length)bucket=cand.filter(s=>s.t>lastT&&!stops.includes(s)).slice(0,3);
+    if(!bucket.length)continue;
+    bucket.sort((a,b)=>metersBetween(a,cur)-metersBetween(b,cur));
+    const pickFrom=bucket.slice(0,Math.min(3,bucket.length));
+    const next=pickFrom[Math.floor(Math.random()*pickFrom.length)];
+    const leg=walkMin(metersBetween(next,cur)),back=walkMin(metersBetween(next,fin));
+    if(!sightTarget&&used+leg+next.dwell+back>budget*(1-reserve)+6)break;
+    used+=leg+next.dwell;stops.push(next);lastT=next.t;cur=next;
+  }
+  return stops;
+}
 function buildStops(){
-  const stops=cfg.noBacktrack?buildStopsLoop():buildStopsNearest();
+  let stops=(cfg.diffEnd&&endPoint)
+    ? buildStopsCorridor()
+    : (cfg.noBacktrack?buildStopsLoop():buildStopsNearest());
+  if(!stops.length)stops=buildStopsNearest();
   if(cfg.stopKinds.size&&pool.foods.length&&stops.length){
     const at=Math.max(1,Math.round(stops.length*.55)),anchor=stops[at-1]||start;
     const used=new Set(stops.map(s=>s.id));
@@ -1349,14 +1562,14 @@ function buildStops(){
 function recompute(stops){
   let prev=start;
   const out=stops.map(s=>{const wf=walkMin(metersBetween(s,prev));prev=s;return{...s,walkFromPrev:wf}});
-  const backWalk=out.length?walkMin(metersBetween(out[out.length-1],start)):0;
+  const backWalk=out.length?walkMin(metersBetween(out[out.length-1],finishPt())):0;
   const distM=out.reduce((a,s,i)=>a+metersBetween(s,i===0?start:out[i-1]),0)
-    +(out.length?metersBetween(out[out.length-1],start):0);
+    +(out.length?metersBetween(out[out.length-1],finishPt()):0);
   return{stops:out,backWalk,walkTotal:out.reduce((a,s)=>a+s.walkFromPrev,0)+backWalk,
     stayTotal:out.reduce((a,s)=>a+s.dwell,0),km:distM/1000};
 }
 async function fetchRoute(stops){
-  const pts=[start,...stops,start];
+  const pts=[start,...stops,finishPt()];
   if(pts.length<2||pts.length>25)return null;
   try{
     const wp=pts.map(p=>`${p.lat},${p.lng}`).join('|');
@@ -1368,7 +1581,7 @@ async function fetchRoute(stops){
   }catch(e){return null}
 }
 function pack(built,r){
-  const latlngs=r?r.latlngs:[start,...built.stops,start].map(p=>[p.lat,p.lng]);
+  const latlngs=r?r.latlngs:[start,...built.stops,finishPt()].map(p=>[p.lat,p.lng]);
   return{...built,latlngs,realDistanceM:r?r.distanceM:null,realDurationMin:r?r.durationMin:null,
     routeSource:r?'geoapify':'straight',overlap:overlapRatio(latlngs)};
 }
@@ -1380,7 +1593,7 @@ async function roll(){
   nextBtn.innerHTML='<span class="die">◆</span> 뽑는 중';
   try{
     const ok=await loadPlaces();
-    if(!ok){routes=[];clearMapLayers();renderResults();if(isMobile())showStep(5);return}
+    if(!ok){routes=[];clearMapLayers();renderResults();if(isMobile())showStep(LAST_STEP);return}
     const cands=[],seen=new Set();
     for(let i=0;i<12&&cands.length<3;i++){
       const s=buildStops();if(!s.length)continue;
@@ -1397,12 +1610,12 @@ async function roll(){
       :(a.realDistanceM??a.km*1000)-(b.realDistanceM??b.km*1000));
     selected=0;openIdx=null;metricCompact=false;
     document.getElementById('heroBlock').style.display='none';
-    if(isMobile())showStep(5);
+    if(isMobile())showStep(LAST_STEP);
     renderResults();drawAll();
   }finally{
     btns.forEach(b=>{b.disabled=false;b.classList.remove('rolling')});
     document.getElementById('rollLabel').textContent='다시 뽑기';
-    nextBtn.innerHTML=step===5?'다시 뽑기':nextHTML;
+    nextBtn.innerHTML=step===LAST_STEP?'다시 뽑기':nextHTML;
   }
 }
 
@@ -1446,7 +1659,7 @@ async function insertCustomSpot(p){
   const r=routes[selected];
   const spot={id:'custom'+Date.now(),name:p.name||'직접 고른 지점',lat:p.lat,lng:p.lng,
     type:'sight',cat:null,custom:true,dwell:12,note:p.region||''};
-  const chain=[start,...r.stops,start];
+  const chain=[start,...r.stops,finishPt()];
   let best=0,bestCost=Infinity;
   for(let i=0;i<chain.length-1;i++){
     const cost=metersBetween(chain[i],spot)+metersBetween(spot,chain[i+1])-metersBetween(chain[i],chain[i+1]);
@@ -1454,7 +1667,7 @@ async function insertCustomSpot(p){
   }
   r.stops.splice(best,0,spot);
   toast(`${spot.name}을(를) ${best+1}번째로 넣었어요`);
-  if(isMobile()){showStep(5)}
+  if(isMobile()){showStep(LAST_STEP)}
   await refreshSelected(false);
 }
 
@@ -1497,7 +1710,7 @@ function drawAll(fit=true){
     const color=s.type==='food'?MAPC.food:(s.custom?MAPC.custom:MAPC.primary);
     const m=L.marker([s.lat,s.lng],{icon:numIcon(i+1,color)}).addTo(markersLayer);
     m.bindPopup(`<strong>${esc(s.name)}</strong><br/>${s.type==='food'?KIND[s.kind].label:(s.custom?'직접 추가':CAT[s.cat]?.label||'스팟')} · 걷기 ${Math.round(s.walkFromPrev)}분`);
-    m.on('click',()=>{openIdx=i;if(isMobile())showStep(5);renderResults();
+    m.on('click',()=>{openIdx=i;if(isMobile())showStep(LAST_STEP);renderResults();
       const c=document.querySelector(`[data-idx="${i}"]`);if(c)c.scrollIntoView({behavior:'smooth',block:'center'})});
   });
   if(fit)fitRoute(r.latlngs);
@@ -1522,7 +1735,7 @@ async function downloadImage(){
   const r=routes[selected];
   const W=900,H=680,SF=2,footer=170;
   let n=-90,s=90,e=-180,w=180;
-  [...r.latlngs,[start.lat,start.lng],...r.stops.map(x=>[x.lat,x.lng])]
+  [...r.latlngs,[start.lat,start.lng],[finishPt().lat,finishPt().lng],...r.stops.map(x=>[x.lat,x.lng])]
     .forEach(([la,ln])=>{n=Math.max(n,la);s=Math.min(s,la);e=Math.max(e,ln);w=Math.min(w,ln)});
   const zoom=fitZoom({n,s,e,w},W,H,60),cLat=(n+s)/2,cLng=(e+w)/2;
   const url=`${API.staticmap}?style=osm-bright&width=${W}&height=${H}&scaleFactor=${SF}`
@@ -1570,13 +1783,19 @@ async function downloadImage(){
     g.strokeStyle='#fff';g.lineWidth=5;g.stroke();
     g.fillStyle='#fff';g.font='600 20px "IBM Plex Sans KR", sans-serif';
     g.textAlign='center';g.textBaseline='middle';g.fillText('출발',sx,sy+1);
+    if(cfg.diffEnd&&endPoint){
+      const [ex,ey]=XY(endPoint.lat,endPoint.lng);
+      g.beginPath();g.arc(ex,ey,25,0,Math.PI*2);g.fillStyle=MAPC.custom;g.fill();
+      g.strokeStyle='#fff';g.lineWidth=5;g.stroke();
+      g.fillStyle='#fff';g.fillText('도착',ex,ey+1);
+    }
     const dist=(r.realDistanceM?r.realDistanceM/1000:r.km).toFixed(1);
     const time=fmtMin((r.realDurationMin??r.walkTotal)+r.stayTotal);
     const y0=ch,pad=34;
     g.textAlign='left';g.textBaseline='alphabetic';
     g.fillStyle='#171717';g.fillRect(0,y0,cv.width,footer*SF);
     g.fillStyle='#fff';g.font='700 40px Nunito, sans-serif';
-    g.fillText(`${start.name} 순환 코스`,pad,y0+62);
+    g.fillText((cfg.diffEnd&&endPoint)?`${start.name} → ${endPoint.name}`:`${start.name} 순환 코스`,pad,y0+62);
     g.fillStyle='rgba(255,255,255,.78)';g.font='400 27px "IBM Plex Mono", monospace';
     g.fillText(`${dist}km · ${time} · 스팟 ${r.stops.length}곳 · ${PACE[cfg.pace].label}`,pad,y0+112);
     g.fillStyle='rgba(255,255,255,.45)';g.font='400 20px "IBM Plex Sans KR", sans-serif';
@@ -1584,7 +1803,7 @@ async function downloadImage(){
     cv.toBlob(b=>{
       if(!b){toast('이미지를 저장하지 못했어요');return}
       const a=document.createElement('a');
-      a.href=URL.createObjectURL(b);a.download=`걸음뽑기_${start.name}_${dist}km.png`;a.click();
+      a.href=URL.createObjectURL(b);a.download=`걸음뽑기_${start.name}${(cfg.diffEnd&&endPoint)?'-'+endPoint.name:''}_${dist}km.png`;a.click();
       setTimeout(()=>URL.revokeObjectURL(a.href),4000);
       toast('이미지를 저장했어요')},'image/png');
   }catch(e){toast(`이미지를 만들지 못했어요 — ${e.message}`,5000)}
@@ -1615,10 +1834,14 @@ function addPhoto(id,files){
 }
 function anchorCard(kind){
   const isStart=kind==='start';
+  const diff=cfg.diffEnd&&endPoint;
+  const pt=isStart?start:finishPt();
+  const icon=isStart?'fa-location-dot':(diff?'fa-flag-checkered':'fa-location-dot');
+  const sub=isStart?'여기서 시작':(diff?'여기서 마침':'여기로 복귀');
   return `<div class="card anchor"><div class="chead">
-    <span class="pinicon"><i class="fa-solid fa-location-dot"></i></span>
-    <span class="cbody"><span class="cname">${esc(start.name)}</span>
-    <span class="cmeta"><span class="tag h">${isStart?'출발':'도착'}</span><span>${isStart?'여기서 시작':'여기로 복귀'}</span></span></span>
+    <span class="pinicon" style="${!isStart&&diff?'color:var(--primary-active)':''}"><i class="fa-solid ${icon}"></i></span>
+    <span class="cbody"><span class="cname">${esc(pt.name)}</span>
+    <span class="cmeta"><span class="tag h">${isStart?'출발':'도착'}</span><span>${sub}</span></span></span>
   </div></div>`;
 }
 function renderResults(){
@@ -1733,7 +1956,7 @@ function bindDrag(root){
 /* ---------- 시작 ---------- */
 document.getElementById('rollBtn').addEventListener('click',roll);
 startMarker.bindPopup(`<strong>${esc(start.name)}</strong><br/>출발 · 도착`);
-drawRadius();renderSnippet();renderStatus();applyLayout();loadPlaces();
+drawRadius();syncDiffEnd();renderSnippet();renderStatus();applyLayout();loadPlaces();
 </script>
 </body>
 </html>
