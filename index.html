@@ -25,6 +25,7 @@
   --f-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   /* 시트 윗면 + 여유 간격 — 지도 위 요소들이 이 선을 기준으로 붙는다 */
   --sheet-gap:12px;
+  --top-h:0px;   /* 상단 검색 영역 실제 높이 (도착지 검색바 유무에 따라 달라진다) */
   --sheet-top:0px;
 }
 /* 다크 테마 — 시스템 설정을 따를 때는 data-theme 속성이 없다 */
@@ -374,7 +375,7 @@ textarea:focus{border-color:var(--ink)}
     border:0;background:transparent;pointer-events:none}
   .searchwrap{pointer-events:auto;margin-top:0}
   .searchbar{background:var(--canvas);box-shadow:var(--shadow);border-color:var(--hairline)}
-  .metricfloat{top:calc(env(safe-area-inset-top) + 68px)}
+  .metricfloat{top:calc(var(--top-h) + 8px);transition:top .2s ease}
 
   /* 모바일에서는 모든 UI가 지도 위에 떠 있다 */
   .sheet{position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:750;
@@ -500,7 +501,7 @@ textarea:focus{border-color:var(--ink)}
     <div class="sheet" id="sheet">
       <div class="grabzone" id="grabZone"><div class="sheet-grab" id="sheetGrab"></div></div>
       <div class="sheet-head">
-        <span class="stitle" id="stepTitle">어떻게 걸을까요?</span>
+        <span class="stitle" id="stepTitle">어떻게 걸을까요</span>
         <span class="stepdots" id="stepDots"></span>
         <button class="icobtn" id="sheetToggle" title="접기"><i class="fa-solid fa-chevron-down"></i></button>
       </div>
@@ -519,7 +520,7 @@ textarea:focus{border-color:var(--ink)}
             <div class="sub">RANDOM WALK</div>
           </div>
           <h1>오늘은 어디로 걸을까요?</h1>
-          <p>정한 출발지와 원하는 장소를 방문하는<br/>걷기 코스를 여러 개 뽑아 드려요.</p>
+          <p>원하는 장소를 방문하고 돌아오는 코스를<br/>여러 개 뽑아 드려요.</p>
         </div>
 
         <div class="sec" data-step="2">
@@ -527,7 +528,7 @@ textarea:focus{border-color:var(--ink)}
           <div class="pacerow" id="paceRow"></div>
           <button class="toggle on" id="noBackBtn" aria-pressed="true">
             <span class="sw"></span>
-            <span>왔던 길 되돌아가지 않기<small>한 방향으로 크게 돌아 출발지로 옵니다</small></span>
+            <span>왔던 길 되돌아가지 않기<small>전까지 걸었던 길을 다시 되돌아오지 않습니다</small></span>
           </button>
           <button class="toggle" id="diffEndBtn" aria-pressed="false">
             <span class="sw"></span>
@@ -586,8 +587,8 @@ textarea:focus{border-color:var(--ink)}
         <div class="status" id="status" data-step="6"></div>
         <p class="foot" data-step="6">
           장소·경로·이미지 <a href="https://www.geoapify.com/" target="_blank" rel="noopener">Geoapify</a>,
-          지도 &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> 기여자, 운영·개발 puarr❤️
-          평점·리뷰는 제공되지 않으며, 추천은 취향·동선·머무는 방식만으로 계산합니다.
+          지도 &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> 기여자.
+          OSM 기반이라 평점·리뷰는 제공되지 않으며, 추천은 취향·동선·머무는 방식만으로 계산합니다.
         </p>
       </div>
 
@@ -718,7 +719,7 @@ CUISINE_LABEL.vegan='비건';CUISINE_LABEL.vegetarian='비건';
 const PACE={hike:{label:'워킹 중심',sub:'많이 걷기',dwellMul:.45,pick:'far',maxStops:10},
   stroll:{label:'산책 중심',sub:'적당히 걷기',dwellMul:1,pick:'mid',maxStops:8},
   mill:{label:'마실 중심',sub:'적게 걷기',dwellMul:1.8,pick:'near',maxStops:6}};
-const STEPS=[null,'오늘의 산책','걷는 방식','얼마나 걸을까요?','무엇을 볼까요?','어디서 쉴까요?','오늘의 코스'];
+const STEPS=[null,'','걷는 방식','얼마나 걸을까요?','무엇을 볼까요?','어디서 쉴까요?','오늘의 코스'];
 const LAST_STEP=6;
 
 /* ---------- 유틸 ---------- */
@@ -888,7 +889,7 @@ if(isNativeApp){
     if(!raw||raw===lastRaw)return;
     lastRaw=raw;
     try{applyNativePayload(JSON.parse(raw))}catch(e){/* JSON이 아니면 무시 */}
-  },5);
+  },200);
 }
 /* 네이티브가 직접 호출할 수도 있게 열어 둔다 */
 window.RandomWalk={
@@ -911,6 +912,11 @@ document.getElementById('meBtn').addEventListener('click',()=>{if(myLoc)centerOn
 /* ============================================================
    단계형 UI (모바일)
    ============================================================ */
+/* 상단 검색 영역 높이를 재서 지표 박스가 겹치지 않게 한다 */
+function updateTopVar(){
+  const t=document.querySelector('.panel-top');
+  document.documentElement.style.setProperty('--top-h',(isMobile()&&t?t.offsetHeight:0)+'px');
+}
 function updateSheetVar(){
   const root=document.documentElement;
   if(!isMobile()){
@@ -930,7 +936,10 @@ function summaryDetailHTML(r){
   return `<p>${esc(start.name)}에서 출발해${food?` ${esc(food.name)}에서 한 번 쉬고,`:''} ${last?esc(last.name)+'을(를) 지나 ':''}${loop?`다시 ${esc(start.name)}으로 돌아옵니다.`:`${esc(fin.name)}에서 마칩니다.`}</p>
     <div class="bullet"><i>✓</i><span>${PACE[cfg.pace].label} · 걷기 ${fmtMin(walkM)} · 머무름 ${fmtMin(r.stayTotal)}</span></div>
     <div class="bullet"><i>${ov<=10?'✓':'!'}</i><span>${ov<=10?`같은 길을 거의 다시 걷지 않아요 (겹침 ${ov}%)`:`왔던 길이 ${ov}% 겹칩니다`}</span></div>
-    <div class="darkacts"><button class="btn btn-ghost-dark" data-dl="1">이미지로 저장</button></div>`;
+    <div class="darkacts">
+      <button class="btn btn-ghost-dark" data-dl="1">이미지로 저장</button>
+      <button class="btn btn-ghost-dark" data-share="1">공유 링크 복사</button>
+    </div>`;
 }
 function metricRowHTML(r){
   const dist=(r.realDistanceM?r.realDistanceM/1000:r.km).toFixed(1);
@@ -952,6 +961,8 @@ function updateMetricFloat(){
   el.classList.add('show');
   el.querySelectorAll('[data-dl]').forEach(b=>b.addEventListener('click',e=>{
     e.stopPropagation();downloadImage()}));
+  el.querySelectorAll('[data-share]').forEach(b=>b.addEventListener('click',e=>{
+    e.stopPropagation();shareCourse()}));
 }
 function setMetricCompact(v){
   const el=document.getElementById('metricFloat');
@@ -1090,7 +1101,7 @@ document.getElementById('sheetToggle').addEventListener('click',toggleSheet);
 function applyLayout(){
   if(!isMobile()){sheetEl.style.height='';sheetEl.classList.remove('collapsed')}
   showStep(step);
-  requestAnimationFrame(()=>{updateSheetVar();map.invalidateSize()});
+  requestAnimationFrame(()=>{updateTopVar();updateSheetVar();map.invalidateSize()});
 }
 window.addEventListener('resize',()=>setTimeout(applyLayout,150));
 
@@ -1178,10 +1189,7 @@ function syncDiffEnd(){
   diffEndBtn.classList.toggle('on',cfg.diffEnd);
   diffEndBtn.setAttribute('aria-pressed',String(cfg.diffEnd));
   document.getElementById('destWrap').style.display=cfg.diffEnd?'block':'none';
-  // 도착지를 따로 쓰면 '되돌아가지 않기'는 의미가 없어 잠근다
-  noBackBtn.style.opacity=cfg.diffEnd?'.45':'';
-  noBackBtn.style.pointerEvents=cfg.diffEnd?'none':'';
-  syncEndMarker();renderSnippet();
+  syncEndMarker();renderSnippet();updateTopVar();
   requestAnimationFrame(updateSheetVar);
 }
 diffEndBtn.addEventListener('click',()=>{
@@ -1546,7 +1554,7 @@ function buildStopsCorridor(){
 }
 function buildStops(){
   let stops=(cfg.diffEnd&&endPoint)
-    ? buildStopsCorridor()
+    ? (cfg.noBacktrack?buildStopsCorridor():buildStopsNearest())
     : (cfg.noBacktrack?buildStopsLoop():buildStopsNearest());
   if(!stops.length)stops=buildStopsNearest();
   if(cfg.stopKinds.size&&pool.foods.length&&stops.length){
@@ -1709,7 +1717,7 @@ function drawAll(fit=true){
   r.stops.forEach((s,i)=>{
     const color=s.type==='food'?MAPC.food:(s.custom?MAPC.custom:MAPC.primary);
     const m=L.marker([s.lat,s.lng],{icon:numIcon(i+1,color)}).addTo(markersLayer);
-    m.bindPopup(`<strong>${esc(s.name)}</strong><br/>${s.type==='food'?KIND[s.kind].label:(s.custom?'직접 추가':CAT[s.cat]?.label||'스팟')} · 걷기 ${Math.round(s.walkFromPrev)}분`);
+    m.bindPopup(`<strong>${esc(s.name)}</strong><br/>${s.type==='food'?(KIND[s.kind]?.label||'쉼터'):(s.custom?'직접 추가':CAT[s.cat]?.label||'스팟')} · 걷기 ${Math.round(s.walkFromPrev)}분`);
     m.on('click',()=>{openIdx=i;if(isMobile())showStep(LAST_STEP);renderResults();
       const c=document.querySelector(`[data-idx="${i}"]`);if(c)c.scrollIntoView({behavior:'smooth',block:'center'})});
   });
@@ -1810,6 +1818,87 @@ async function downloadImage(){
 }
 
 /* ============================================================
+   코스 공유 — 코스 정보를 URL에 담는다
+   ============================================================ */
+const b64e=str=>{
+  const bytes=new TextEncoder().encode(str);
+  let bin='';bytes.forEach(b=>bin+=String.fromCharCode(b));
+  return btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+};
+const b64d=str=>{
+  const bin=atob(str.replace(/-/g,'+').replace(/_/g,'/'));
+  return new TextDecoder().decode(Uint8Array.from(bin,c=>c.charCodeAt(0)));
+};
+function shareURL(){
+  const r=routes[selected];if(!r)return null;
+  const rd=n=>+Number(n).toFixed(6);
+  const payload={v:1,
+    s:[rd(start.lat),rd(start.lng),start.name],
+    e:(cfg.diffEnd&&endPoint)?[rd(endPoint.lat),rd(endPoint.lng),endPoint.name]:null,
+    p:cfg.pace,n:cfg.minutes,r:cfg.radiusKm,nb:cfg.noBacktrack?1:0,
+    st:r.stops.map(s=>[rd(s.lat),rd(s.lng),s.name,s.type,
+      s.type==='food'?s.kind:(s.custom?'custom':s.cat),Math.round(s.dwell)])};
+  return `${location.origin}${location.pathname}?c=${b64e(JSON.stringify(payload))}`;
+}
+async function shareCourse(){
+  const url=shareURL();
+  if(!url){toast('공유할 코스가 없어요');return}
+  try{
+    await navigator.clipboard.writeText(url);
+    toast('공유 링크를 복사했어요');
+  }catch(e){
+    // 클립보드 권한이 없으면 직접 복사할 수 있게 보여 준다
+    const ta=document.createElement('textarea');
+    ta.value=url;ta.style.position='fixed';ta.style.opacity='0';
+    document.body.appendChild(ta);ta.select();
+    let ok=false;try{ok=document.execCommand('copy')}catch(_){}
+    document.body.removeChild(ta);
+    toast(ok?'공유 링크를 복사했어요':'복사에 실패했어요 — 주소창의 링크를 직접 복사해 주세요');
+  }
+}
+/* 공유 링크로 들어왔을 때 코스를 되살린다 */
+async function restoreFromURL(){
+  const raw=new URLSearchParams(location.search).get('c');
+  if(!raw)return false;
+  let d;try{d=JSON.parse(b64d(raw))}catch(e){return false}
+  if(!d||!Array.isArray(d.s))return false;
+  start={lat:d.s[0],lng:d.s[1],name:d.s[2]||'출발지'};
+  startMarker.setLatLng([start.lat,start.lng]);
+  qEl.value=start.name;
+  if(Array.isArray(d.e)){
+    cfg.diffEnd=true;
+    endPoint={lat:d.e[0],lng:d.e[1],name:d.e[2]||'도착지'};
+    document.getElementById('qDest').value=endPoint.name;
+  }
+  if(d.p&&PACE[d.p])cfg.pace=d.p;
+  if(d.n)cfg.minutes=d.n;
+  if(d.r)cfg.radiusKm=d.r;
+  cfg.noBacktrack=!!d.nb;
+  minEl.value=cfg.minutes;document.getElementById('minOut').textContent=fmtMin(cfg.minutes);
+  radEl.value=cfg.radiusKm;document.getElementById('radOut').textContent=cfg.radiusKm.toFixed(1)+'km';
+  paceUI();syncDiffEnd();
+  noBackBtn.classList.toggle('on',cfg.noBacktrack);
+  noBackBtn.setAttribute('aria-pressed',String(cfg.noBacktrack));
+  drawRadius();renderSnippet();
+  const stops=(d.st||[]).map((a,i)=>{
+    const type=a[3]||'sight',tag=a[4];
+    return {id:'shared'+i,lat:a[0],lng:a[1],name:a[2],type,
+      kind:type==='food'?tag:undefined,
+      cat:type==='food'?null:(tag==='custom'?null:tag),
+      custom:tag==='custom',dwell:a[5]||12};
+  });
+  if(!stops.length)return true;
+  const built=recompute(stops);
+  routes=[pack(built,await fetchRoute(built.stops))];
+  selected=0;openIdx=null;metricCompact=false;
+  document.getElementById('heroBlock').style.display='none';
+  if(isMobile())showStep(LAST_STEP);
+  renderResults();drawAll();
+  toast('공유받은 코스를 불러왔어요');
+  return true;
+}
+
+/* ============================================================
    렌더링
    ============================================================ */
 function renderStatus(){
@@ -1872,7 +1961,7 @@ function renderResults(){
   r.stops.forEach((s,i)=>{
     const isFood=s.type==='food',n=notes[s.id],open=openIdx===i;
     const color=isFood?'var(--food)':(s.custom?'var(--primary-active)':'var(--primary)');
-    const label=isFood?KIND[s.kind].label:(s.custom?'직접 추가':(CAT[s.cat]?.label||'스팟'));
+    const label=isFood?(KIND[s.kind]?.label||'쉼터'):(s.custom?'직접 추가':(CAT[s.cat]?.label||'스팟'));
     h+=`<div class="card" data-idx="${i}" draggable="true">
       <div class="chead">
         <button class="grip" title="끌어서 순서 변경"><i class="fa-solid fa-grip-vertical"></i></button>
@@ -1922,6 +2011,7 @@ function renderResults(){
   el.querySelectorAll('[data-memo]').forEach(t=>t.addEventListener('input',()=>{
     notes[t.dataset.memo]=notes[t.dataset.memo]||{memo:'',photos:[]};notes[t.dataset.memo].memo=t.value}));
   el.querySelectorAll('[data-dl]').forEach(b=>b.addEventListener('click',downloadImage));
+  el.querySelectorAll('[data-share]').forEach(b=>b.addEventListener('click',shareCourse));
   const ai=document.getElementById('addSpotInline');
   if(ai)ai.addEventListener('click',()=>{
     addMode=true;pickMode=false;
@@ -1956,7 +2046,8 @@ function bindDrag(root){
 /* ---------- 시작 ---------- */
 document.getElementById('rollBtn').addEventListener('click',roll);
 startMarker.bindPopup(`<strong>${esc(start.name)}</strong><br/>출발 · 도착`);
-drawRadius();syncDiffEnd();renderSnippet();renderStatus();applyLayout();loadPlaces();
+drawRadius();syncDiffEnd();renderSnippet();renderStatus();applyLayout();
+restoreFromURL().then(()=>loadPlaces()).catch(()=>loadPlaces());
 </script>
 </body>
 </html>
