@@ -192,6 +192,36 @@ input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:var(--r
 .bullet{display:flex;gap:8px;font-size:13px;color:var(--on-dark-mute);margin-bottom:8px;line-height:1.45}
 .bullet i{font-style:normal;color:var(--on-dark)}
 .darkacts{display:flex;gap:7px;flex-wrap:wrap;margin-top:16px}
+.savewrap{position:relative}
+.savemenu{position:absolute;left:0;bottom:calc(100% + 8px);z-index:60;min-width:170px;
+  background:var(--canvas);border:1px solid var(--hairline);border-radius:var(--r-lg);
+  box-shadow:var(--shadow);overflow:hidden;padding:4px}
+.savemenu[hidden]{display:none}
+.savemenu button{display:block;width:100%;text-align:left;padding:10px 12px;font-size:13px;
+  color:var(--ink);border-radius:var(--r-md)}
+.savemenu button:hover{background:var(--surface-soft)}
+/* 기록 저장 후 설정 버튼을 잠깐 가리킨다 */
+@keyframes pointPulse{0%,100%{box-shadow:0 0 0 0 rgba(31,111,82,.55)}50%{box-shadow:0 0 0 8px rgba(31,111,82,0)}}
+.icobtn.pointing{background:var(--primary);border-color:var(--primary);color:#fff;animation:pointPulse 1s ease infinite}
+.pointer-hint{position:fixed;z-index:1200;background:var(--surface-dark);color:var(--on-dark);
+  padding:10px 16px;border-radius:var(--r-lg);font-size:13px;box-shadow:var(--shadow);max-width:250px;line-height:1.5}
+.pointer-hint::after{content:'';position:absolute;width:10px;height:10px;background:var(--surface-dark);
+  transform:rotate(45deg);top:-5px;right:22px}
+.histmeta{display:block;font-size:11px;color:var(--mute);font-weight:400;margin-top:2px}
+
+/* 모바일 저장 팝업 — 지표 박스의 overflow:hidden에 잘리지 않게 별도 오버레이로 띄운다 */
+.savepopup{position:fixed;inset:0;z-index:1300;display:none;align-items:flex-end;justify-content:center;
+  background:rgba(0,0,0,.42);padding:0}
+.savepopup.show{display:flex}
+.savepopup-card{width:100%;background:var(--canvas);border-radius:var(--r-xl) var(--r-xl) 0 0;
+  padding:10px 16px calc(14px + env(safe-area-inset-bottom));box-shadow:0 -6px 30px rgba(0,0,0,.3)}
+.savepopup-grab{width:38px;height:4px;border-radius:3px;background:var(--hairline-strong);margin:6px auto 14px}
+.savepopup-item{display:flex;align-items:center;gap:14px;width:100%;padding:16px 14px;border-radius:var(--r-lg);
+  font-size:16px;font-weight:600;color:var(--ink);text-align:left}
+.savepopup-item:active{background:var(--surface-soft)}
+.savepopup-item i{width:24px;text-align:center;font-size:18px;color:var(--primary)}
+.savepopup-cancel{width:100%;margin-top:8px;padding:14px;border-radius:var(--r-lg);text-align:center;
+  font-size:15px;font-weight:600;color:var(--body);background:var(--surface-soft)}
 
 .dragnote{font-size:11.5px;color:var(--mute);margin:0 0 6px;display:flex;align-items:center;gap:6px}
 .card{border-bottom:1px solid var(--hairline);padding:14px 0;background:var(--canvas)}
@@ -333,7 +363,7 @@ textarea:focus{border-color:var(--ink)}
 .presetdraft .lab{margin-bottom:10px}
 
 /* 코스 지표 — 지도 위에 뜨는 박스. 다른 곳을 누르면 작아진다 */
-.metricfloat{position:absolute;left:50%;transform:translateX(-50%);top:16px;z-index:420;display:none;
+.metricfloat{position:fixed;left:50%;transform:translateX(-50%);top:16px;z-index:800;display:none;
   flex-direction:column;width:calc(100% - 24px);max-width:420px;
   background:var(--surface-dark);color:var(--on-dark);
   border-radius:18px;padding:16px 20px;box-shadow:0 6px 22px rgba(0,0,0,.28);cursor:pointer;
@@ -356,6 +386,7 @@ textarea:focus{border-color:var(--ink)}
              margin-top .26s cubic-bezier(.22,.9,.3,1),padding-top .26s cubic-bezier(.22,.9,.3,1)}
 .metricfloat .mdetail p{margin:0 0 12px;font-size:13.5px;line-height:1.5;color:var(--on-dark-mute)}
 .metricfloat .darkacts{margin-top:12px}
+.metricfloat .savemenu{bottom:auto;top:calc(100% + 8px)}
 /* 접힌 상태 — 알약이 되지만 곡률은 이어서 변한다 */
 .metricfloat.compact{width:auto;max-width:none;padding:8px 16px;border-radius:17px}
 .metricfloat.compact .mrow{gap:10px}
@@ -450,6 +481,7 @@ textarea:focus{border-color:var(--ink)}
 .icobtn:hover{border-color:var(--primary)}
 .suggest button:hover{background:var(--surface-soft)}
 .chip:hover{border-color:var(--primary);color:var(--ink)}
+.chip.food:hover{border-color:var(--food);color:var(--ink)}
 .pacebtn:hover{border-color:var(--primary)}
 .toggle:hover{border-color:var(--primary)}
 .numfield button:hover{background:var(--surface-soft);color:var(--ink)}
@@ -481,6 +513,7 @@ textarea:focus{border-color:var(--ink)}
         <div class="searchbar">
           <i class="fa-solid fa-magnifying-glass" style="color:var(--mute);font-size:13px"></i>
           <input id="q" type="text" placeholder="출발지 검색" autocomplete="off" />
+          <button class="icobtn" id="qClearBtn" title="모두 지우기"><i class="fa-solid fa-xmark"></i></button>
           <button class="icobtn" id="gpsBtnPanel" title="현재 위치에서 출발"><i class="fa-solid fa-crosshairs"></i></button>
           <button class="icobtn" id="pinBtn" title="지도에서 고르기"><i class="fa-solid fa-location-dot"></i></button>
           <button class="icobtn" id="settingsBtnM" title="설정"><i class="fa-solid fa-sliders"></i></button>
@@ -567,12 +600,18 @@ textarea:focus{border-color:var(--ink)}
           <div class="lab"><span>쉬어 갈 곳</span></div>
           <div class="chiprow" id="kindChips"></div>
           <div class="sub" id="foodSub" style="display:none">
-            <div class="lab" style="margin-bottom:9px">
-              <span>음식 취향</span>
-              <span><button class="link" id="openPresets">사전 설정</button>
-              <button class="link" id="clearCuisines" style="margin-left:10px">모두 해제</button></span>
+            <div id="cuisineBlock">
+              <div class="lab" style="margin-bottom:9px">
+                <span>음식 취향</span>
+                <span><button class="link" id="openPresets">사전 설정</button>
+                <button class="link" id="clearCuisines" style="margin-left:10px">모두 해제</button></span>
+              </div>
+              <div class="chiprow" id="cuisineChips" style="margin-bottom:16px"></div>
             </div>
-            <div class="chiprow" id="cuisineChips" style="margin-bottom:16px"></div>
+            <div id="readingBlock" style="display:none">
+              <div class="lab" style="margin-bottom:9px"><span>어디서 읽을까요</span></div>
+              <div class="chiprow" id="readingChips" style="margin-bottom:16px"></div>
+            </div>
             <div class="rowlab">머무는 방식</div>
             <div class="seg" id="turnSeg">
               <button data-v="fast">빨리 먹고 다시 걷기</button>
@@ -588,7 +627,7 @@ textarea:focus{border-color:var(--ink)}
         <p class="foot" data-step="6">
           장소·경로·이미지 <a href="https://www.geoapify.com/" target="_blank" rel="noopener">Geoapify</a>,
           지도 &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> 기여자.
-          OSM 기반이라 평점·리뷰는 제공되지 않으며, 추천은 취향·동선·머무는 방식만으로 계산합니다.
+          평점·리뷰는 제공되지 않으며, 추천은 취향·동선·머무는 방식만으로 계산합니다.
         </p>
       </div>
 
@@ -601,7 +640,6 @@ textarea:focus{border-color:var(--ink)}
 
   <div class="mapwrap">
     <div id="map"></div>
-    <div class="metricfloat" id="metricFloat"></div>
     <button class="floatbtn" id="meBtn" title="내 위치로 이동" style="display:none"><i class="fa-solid fa-location-arrow"></i></button>
     <button class="floatbtn" id="gpsBtn" title="현재 위치"><i class="fa-solid fa-crosshairs"></i></button>
     <button class="floatbtn" id="locateBtn" title="출발지 보기"><i class="fa-solid fa-location-dot"></i></button>
@@ -618,6 +656,20 @@ textarea:focus{border-color:var(--ink)}
     <div class="toast" id="toast"></div>
   </div>
 
+  <!-- .mapwrap은 position:fixed라서 자체 쌓임 맥락을 만든다.
+       그 안에 두면 z-index를 아무리 올려도 시트(.sheet) 위로 못 올라오니,
+       시트와 같은 층(형제)으로 따로 꺼내 둔다. -->
+  <div class="metricfloat" id="metricFloat"></div>
+
+  <div class="savepopup" id="savePopup">
+    <div class="savepopup-card">
+      <div class="savepopup-grab"></div>
+      <button class="savepopup-item" id="popDl"><i class="fa-solid fa-image"></i> 이미지로 저장</button>
+      <button class="savepopup-item" id="popHist"><i class="fa-solid fa-bookmark"></i> 기록에 저장</button>
+      <button class="savepopup-cancel" id="popCancel">취소</button>
+    </div>
+  </div>
+
   <div class="modal" id="settingsModal">
     <div class="modal-card">
       <div class="modal-head">
@@ -631,6 +683,14 @@ textarea:focus{border-color:var(--ink)}
           <button data-t="dark">다크</button>
           <button data-t="system">시스템 설정</button>
         </div>
+      </div>
+      <div class="modal-sec">
+        <h3>불러오기</h3>
+        <div class="presetform" style="margin-bottom:14px">
+          <input id="linkInput" type="text" placeholder="공유 링크 붙여넣기" />
+          <button class="mini" id="linkLoad">불러오기</button>
+        </div>
+        <ul class="presetlist" id="historyList"></ul>
       </div>
       <div class="modal-sec">
         <h3>저장된 음식 취향 사전 설정</h3>
@@ -689,7 +749,13 @@ const KIND={
   dessert:{label:'디저트·빵집',dwell:16,api:['catering.ice_cream','catering.cafe.dessert','catering.cafe.cake','catering.cafe.donut','catering.cafe.waffle','catering.cafe.frozen_yogurt','commercial.food_and_drink.bakery','commercial.food_and_drink.confectionery','commercial.food_and_drink.chocolate']},
   bar:{label:'술집',dwell:70,api:['catering.bar','catering.pub','catering.biergarten','catering.taproom']},
   convenience:{label:'편의점',dwell:8,api:['commercial.convenience']},
-  books:{label:'책방',dwell:25,api:['commercial.books']},
+  books:{label:'독서',dwell:25,api:[]},   // 실제 카테고리는 READING 선택값으로 정해진다
+};
+/* 독서 계열은 어디서 읽을지 따로 고른다 */
+const READING={
+  '도서관':{api:['education.library'],dwell:30},
+  '책방':{api:['commercial.books'],dwell:25},
+  '만화 카페':{api:['catering.cafe'],dwell:60,nameLike:/만화|망가|툰|코믹/i},
 };
 const CUISINE={
   '한식':{api:['catering.restaurant.korean']},
@@ -766,7 +832,7 @@ const store={
 /* ---------- 상태 ---------- */
 const cfg={pace:'stroll',minutes:90,radiusKm:1.4,stopCount:'auto',noBacktrack:true,diffEnd:false,
   interests:new Set(['park','water','view','landmark']),
-  stopKinds:new Set(['cafe']),cuisines:new Set(),turnover:'slow'};
+  stopKinds:new Set(['cafe']),cuisines:new Set(),reading:new Set(['도서관','책방','만화 카페']),turnover:'slow'};
 let start={lat:37.5570,lng:126.9245,name:'홍대입구'};
 let endPoint=null;                 // 도착지를 따로 쓸 때만 값이 있다
 const finishPt=()=>(cfg.diffEnd&&endPoint)?endPoint:start;
@@ -889,7 +955,7 @@ if(isNativeApp){
     if(!raw||raw===lastRaw)return;
     lastRaw=raw;
     try{applyNativePayload(JSON.parse(raw))}catch(e){/* JSON이 아니면 무시 */}
-  },200);
+  },75);
 }
 /* 네이티브가 직접 호출할 수도 있게 열어 둔다 */
 window.RandomWalk={
@@ -937,7 +1003,13 @@ function summaryDetailHTML(r){
     <div class="bullet"><i>✓</i><span>${PACE[cfg.pace].label} · 걷기 ${fmtMin(walkM)} · 머무름 ${fmtMin(r.stayTotal)}</span></div>
     <div class="bullet"><i>${ov<=10?'✓':'!'}</i><span>${ov<=10?`같은 길을 거의 다시 걷지 않아요 (겹침 ${ov}%)`:`왔던 길이 ${ov}% 겹칩니다`}</span></div>
     <div class="darkacts">
-      <button class="btn btn-ghost-dark" data-dl="1">이미지로 저장</button>
+      <span class="savewrap">
+        <button class="btn btn-ghost-dark" data-save="1">저장</button>
+        <span class="savemenu" data-savemenu hidden>
+          <button data-dl="1">이미지로 저장</button>
+          <button data-hist="1">기록에 저장</button>
+        </span>
+      </span>
       <button class="btn btn-ghost-dark" data-share="1">공유 링크 복사</button>
     </div>`;
 }
@@ -959,10 +1031,7 @@ function updateMetricFloat(){
     +`<div class="mdetail">${summaryDetailHTML(r)}</div>`;
   el.classList.toggle('compact',metricCompact);
   el.classList.add('show');
-  el.querySelectorAll('[data-dl]').forEach(b=>b.addEventListener('click',e=>{
-    e.stopPropagation();downloadImage()}));
-  el.querySelectorAll('[data-share]').forEach(b=>b.addEventListener('click',e=>{
-    e.stopPropagation();shareCourse()}));
+  bindCourseActions(el,true);
 }
 function setMetricCompact(v){
   const el=document.getElementById('metricFloat');
@@ -1009,7 +1078,10 @@ function showStep(n,dir){
   requestAnimationFrame(updateSheetVar);
 }
 document.getElementById('stepPrev').addEventListener('click',()=>{
-  if(step===LAST_STEP)showStep(LAST_STEP-1,'prev');else showStep(step-1,'prev')});
+  if(step===LAST_STEP){
+    routes=[];openIdx=null;clearMapLayers();renderResults();   // 조건으로 돌아가면 지도의 코스도 지운다
+    showStep(LAST_STEP-1,'prev');
+  }else showStep(step-1,'prev')});
 document.getElementById('stepNext').addEventListener('click',()=>{
   if(step>=LAST_STEP-1)roll();else showStep(step+1,'next')});
 
@@ -1109,7 +1181,7 @@ window.addEventListener('resize',()=>setTimeout(applyLayout,150));
    설정 모달
    ============================================================ */
 const modal=document.getElementById('settingsModal');
-function openSettings(){modal.classList.add('show');renderPresets()}
+function openSettings(){modal.classList.add('show');renderPresets();renderHistory()}
 function closeSettings(){modal.classList.remove('show')}
 document.getElementById('settingsBtn').addEventListener('click',openSettings);
 document.getElementById('settingsBtnM').addEventListener('click',openSettings);
@@ -1142,7 +1214,7 @@ function renderPresets(){
   ul.querySelectorAll('[data-apply]').forEach(b=>b.addEventListener('click',()=>{
     const p=presets[+b.dataset.apply];
     cfg.cuisines=new Set(p.cuisines.filter(c=>CUISINE[c]));
-    if(!cfg.stopKinds.size)cfg.stopKinds.add('restaurant');
+    if(!cfg.stopKinds.has('restaurant')&&!cfg.stopKinds.has('fastfood'))cfg.stopKinds.add('restaurant');
     poolKey=null;refreshChips();renderSnippet();closeSettings();
     toast(`"${p.name}" 사전 설정을 적용했어요`)}));
   ul.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>{
@@ -1158,6 +1230,10 @@ document.getElementById('copyCurrent').addEventListener('click',()=>{
   presetDraft=new Set(cfg.cuisines);renderPresetChips()});
 document.getElementById('clearDraft').addEventListener('click',()=>{
   presetDraft.clear();renderPresetChips()});
+document.getElementById('linkLoad').addEventListener('click',()=>{
+  loadFromLink(document.getElementById('linkInput').value)});
+document.getElementById('linkInput').addEventListener('keydown',e=>{
+  if(e.key==='Enter')loadFromLink(e.target.value)});
 document.getElementById('savePreset').addEventListener('click',()=>{
   const inp=document.getElementById('presetName');
   const name=inp.value.trim()||`사전 설정 ${presets.length+1}`;
@@ -1234,6 +1310,7 @@ document.getElementById('cntPlus').addEventListener('click',()=>setCount(cfg.sto
 cntAuto.addEventListener('click',()=>setCount(''));
 syncCount();
 
+/* 칩은 다시 그리지 않고 눌린 칩의 클래스만 바꾼다 (선택 반응이 즉각적이도록) */
 function chipRow(el,entries,set,cls,onChange){
   el.innerHTML=Object.entries(entries).map(([k,v])=>{
     const label=typeof v==='string'?v:v.label;
@@ -1241,20 +1318,35 @@ function chipRow(el,entries,set,cls,onChange){
     return `<button class="chip ${cls||''} ${set.has(k)?'on':''}" data-k="${k}">${label}${n!==null?`<span class="n">${n}</span>`:''}</button>`;
   }).join('');
   el.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
-    const k=b.dataset.k;set.has(k)?set.delete(k):set.add(k);
-    poolKey=null;if(onChange)onChange();refreshChips();renderSnippet()}));
+    const k=b.dataset.k;
+    if(set.has(k))set.delete(k);else set.add(k);
+    b.classList.toggle('on');
+    poolKey=null;
+    if(onChange)onChange();
+    renderSnippet();
+    requestAnimationFrame(updateSheetVar);
+  }));
 }
 function countAvailable(key,isFood){
   if(dataState!=='ok')return null;
   return (isFood?pool.foods.filter(f=>f.kind===key):pool.sights.filter(s=>s.cat===key)).length;
 }
+/* 쉬어 갈 곳 선택에 따라 아래 세부 선택을 바꾼다 */
+function syncFoodSub(){
+  const hasAny=cfg.stopKinds.size>0;
+  const wantsFood=cfg.stopKinds.has('restaurant')||cfg.stopKinds.has('fastfood');
+  const wantsReading=cfg.stopKinds.has('books');
+  document.getElementById('foodSub').style.display=hasAny?'block':'none';
+  document.getElementById('cuisineBlock').style.display=wantsFood?'block':'none';
+  document.getElementById('readingBlock').style.display=wantsReading?'block':'none';
+  requestAnimationFrame(updateSheetVar);
+}
 function refreshChips(){
   chipRow(document.getElementById('interestChips'),CAT,cfg.interests,'');
-  chipRow(document.getElementById('kindChips'),KIND,cfg.stopKinds,'food',()=>{
-    document.getElementById('foodSub').style.display=cfg.stopKinds.size?'block':'none'});
-  chipRow(document.getElementById('cuisineChips'),Object.fromEntries(Object.keys(CUISINE).map(c=>[c,c])),cfg.cuisines,'');
-  document.getElementById('foodSub').style.display=cfg.stopKinds.size?'block':'none';
-  requestAnimationFrame(updateSheetVar);
+  chipRow(document.getElementById('kindChips'),KIND,cfg.stopKinds,'food',syncFoodSub);
+  chipRow(document.getElementById('cuisineChips'),Object.fromEntries(Object.keys(CUISINE).map(c=>[c,c])),cfg.cuisines,'food');
+  chipRow(document.getElementById('readingChips'),Object.fromEntries(Object.keys(READING).map(c=>[c,c])),cfg.reading,'food');
+  syncFoodSub();
 }
 refreshChips();
 document.getElementById('clearInterests').addEventListener('click',()=>{cfg.interests.clear();poolKey=null;refreshChips();renderSnippet()});
@@ -1393,6 +1485,8 @@ function useCurrentLocation(){
   },err=>toast(err.code===1?'위치 권한이 거부됐어요':err.code===2?'위치를 찾지 못했어요':'위치 확인이 오래 걸려요'),
   {enableHighAccuracy:true,timeout:9000,maximumAge:60000});
 }
+document.getElementById('qClearBtn').addEventListener('click',()=>{
+  qEl.value='';document.getElementById('suggest').style.display='none';qEl.focus()});
 document.getElementById('gpsBtn').addEventListener('click',useCurrentLocation);
 document.getElementById('gpsBtnPanel').addEventListener('click',useCurrentLocation);
 function setStart(p,fly){
@@ -1418,8 +1512,38 @@ function currentKey(){return [start.lat.toFixed(4),start.lng.toFixed(4),cfg.radi
   [...cfg.interests].sort().join(','),[...cfg.stopKinds].sort().join(','),[...cfg.cuisines].sort().join(',')].join('|')}
 function catOf(cs){for(const [k,d] of Object.entries(CAT)){
   if(!cfg.interests.size||cfg.interests.has(k)){if(d.api.some(a=>cs.includes(a)))return k}}return null}
-function kindOf(cs){for(const [k,d] of Object.entries(KIND)){
-  if(cfg.stopKinds.has(k)&&d.api.some(a=>cs.includes(a)))return k}return null}
+/* '독서'는 하위 선택(도서관/책방/만화 카페)에 따라 판정이 달라진다.
+   만화 카페는 별도 카테고리가 없어 카페 중 이름으로 골라낸다. */
+function readingHit(cs,name){
+  if(!cfg.stopKinds.has('books'))return false;
+  for(const key of cfg.reading){
+    const def=READING[key];if(!def)continue;
+    if(def.nameLike){ if(cs.includes('catering.cafe')&&def.nameLike.test(name||''))return true; }
+    else if(def.api.some(a=>cs.includes(a)))return true;
+  }
+  return false;
+}
+function kindOf(cs,name){
+  if(readingHit(cs,name))return 'books';
+  for(const [k,d] of Object.entries(KIND)){
+    if(k==='books')continue;
+    if(cfg.stopKinds.has(k)&&d.api.some(a=>cs.includes(a)))return k;
+  }
+  return null;
+}
+function readingLabel(cs,name){
+  for(const key of cfg.reading){
+    const def=READING[key];if(!def)continue;
+    if(def.nameLike){if(cs.includes('catering.cafe')&&def.nameLike.test(name||''))return key}
+    else if(def.api.some(a=>cs.includes(a)))return key;
+  }
+  return null;
+}
+function readingDwell(kind,cs,name){
+  if(kind!=='books')return KIND[kind].dwell;
+  const label=readingLabel(cs,name);
+  return (label&&READING[label]?.dwell)||KIND.books.dwell;
+}
 function cuisineOf(cs){for(const c of cs){const leaf=c.split('.').pop();if(CUISINE_LABEL[leaf])return CUISINE_LABEL[leaf]}return null}
 async function loadPlaces(force){
   const key=currentKey();
@@ -1427,7 +1551,9 @@ async function loadPlaces(force){
   dataState='loading';dataError='';renderStatus();
   const R=Math.round(cfg.radiusKm*1000);
   const sightCats=[...(cfg.interests.size?cfg.interests:Object.keys(CAT))].flatMap(k=>CAT[k].api);
-  const foodCats=[...cfg.stopKinds].flatMap(k=>KIND[k].api).concat([...cfg.cuisines].flatMap(c=>CUISINE[c].api));
+  const foodCats=[...cfg.stopKinds].flatMap(k=>KIND[k].api)
+    .concat([...cfg.cuisines].flatMap(c=>CUISINE[c].api))
+    .concat(cfg.stopKinds.has('books')?[...cfg.reading].flatMap(k=>READING[k]?.api||[]):[]);
   const vegan=[...cfg.cuisines].some(c=>CUISINE[c].condition==='vegan');
   const [sr,fr]=await Promise.allSettled([
     sightCats.length?getJSON(`${API.places}?categories=${[...new Set(sightCats)].join(',')}`
@@ -1445,9 +1571,11 @@ async function loadPlaces(force){
     sights.push({id:'s'+(p.place_id||`${p.lat},${p.lon}`),name:p.name,lat:p.lat,lng:p.lon,type:'sight',
       cat,dwell:CAT[cat].dwell,note:p.address_line2||p.formatted||''})});
   if(fr.status==='fulfilled')(fr.value.features||[]).forEach(f=>{const p=f.properties;if(!p.name)return;
-    const kind=kindOf(p.categories||[]);if(!kind)return;
+    const kind=kindOf(p.categories||[],p.name);if(!kind)return;
     foods.push({id:'f'+(p.place_id||`${p.lat},${p.lon}`),name:p.name,lat:p.lat,lng:p.lon,type:'food',
-      kind,dwell:KIND[kind].dwell,cuisine:cuisineOf(p.categories||[]),note:p.address_line2||p.formatted||''})});
+      kind,dwell:readingDwell(kind,p.categories||[],p.name),
+      cuisine:kind==='books'?readingLabel(p.categories||[],p.name):cuisineOf(p.categories||[]),
+      note:p.address_line2||p.formatted||''})});
   pool={sights,foods};poolKey=key;
   if(!sights.length&&!foods.length){dataError='이 범위에서 조건에 맞는 장소를 찾지 못했어요';
     dataState='fail';renderStatus();refreshChips();return null}
@@ -1829,16 +1957,20 @@ const b64d=str=>{
   const bin=atob(str.replace(/-/g,'+').replace(/_/g,'/'));
   return new TextDecoder().decode(Uint8Array.from(bin,c=>c.charCodeAt(0)));
 };
-function shareURL(){
+const SHARE_ORIGIN='https://walc.kro.kr';   // 공유 링크는 항상 이 주소로 나간다
+function coursePayload(){
   const r=routes[selected];if(!r)return null;
   const rd=n=>+Number(n).toFixed(6);
-  const payload={v:1,
+  return {v:1,
     s:[rd(start.lat),rd(start.lng),start.name],
     e:(cfg.diffEnd&&endPoint)?[rd(endPoint.lat),rd(endPoint.lng),endPoint.name]:null,
     p:cfg.pace,n:cfg.minutes,r:cfg.radiusKm,nb:cfg.noBacktrack?1:0,
     st:r.stops.map(s=>[rd(s.lat),rd(s.lng),s.name,s.type,
       s.type==='food'?s.kind:(s.custom?'custom':s.cat),Math.round(s.dwell)])};
-  return `${location.origin}${location.pathname}?c=${b64e(JSON.stringify(payload))}`;
+}
+function shareURL(){
+  const payload=coursePayload();
+  return payload?`${SHARE_ORIGIN}?c=${b64e(JSON.stringify(payload))}`:null;
 }
 async function shareCourse(){
   const url=shareURL();
@@ -1856,20 +1988,15 @@ async function shareCourse(){
     toast(ok?'공유 링크를 복사했어요':'복사에 실패했어요 — 주소창의 링크를 직접 복사해 주세요');
   }
 }
-/* 공유 링크로 들어왔을 때 코스를 되살린다 */
-async function restoreFromURL(){
-  const raw=new URLSearchParams(location.search).get('c');
-  if(!raw)return false;
-  let d;try{d=JSON.parse(b64d(raw))}catch(e){return false}
+/* 공유 payload 하나로 코스를 되살린다 (링크 진입 / 기록 불러오기 공용) */
+async function applyPayload(d){
   if(!d||!Array.isArray(d.s))return false;
   start={lat:d.s[0],lng:d.s[1],name:d.s[2]||'출발지'};
   startMarker.setLatLng([start.lat,start.lng]);
   qEl.value=start.name;
-  if(Array.isArray(d.e)){
-    cfg.diffEnd=true;
-    endPoint={lat:d.e[0],lng:d.e[1],name:d.e[2]||'도착지'};
-    document.getElementById('qDest').value=endPoint.name;
-  }
+  cfg.diffEnd=Array.isArray(d.e);
+  endPoint=cfg.diffEnd?{lat:d.e[0],lng:d.e[1],name:d.e[2]||'도착지'}:null;
+  document.getElementById('qDest').value=endPoint?endPoint.name:'';
   if(d.p&&PACE[d.p])cfg.pace=d.p;
   if(d.n)cfg.minutes=d.n;
   if(d.r)cfg.radiusKm=d.r;
@@ -1882,7 +2009,7 @@ async function restoreFromURL(){
   drawRadius();renderSnippet();
   const stops=(d.st||[]).map((a,i)=>{
     const type=a[3]||'sight',tag=a[4];
-    return {id:'shared'+i,lat:a[0],lng:a[1],name:a[2],type,
+    return {id:'shared'+i+'-'+Date.now(),lat:a[0],lng:a[1],name:a[2],type,
       kind:type==='food'?tag:undefined,
       cat:type==='food'?null:(tag==='custom'?null:tag),
       custom:tag==='custom',dwell:a[5]||12};
@@ -1894,9 +2021,109 @@ async function restoreFromURL(){
   document.getElementById('heroBlock').style.display='none';
   if(isMobile())showStep(LAST_STEP);
   renderResults();drawAll();
-  toast('공유받은 코스를 불러왔어요');
   return true;
 }
+async function restoreFromURL(){
+  const raw=new URLSearchParams(location.search).get('c');
+  if(!raw)return false;
+  let d;try{d=JSON.parse(b64d(raw))}catch(e){return false}
+  const ok=await applyPayload(d);
+  if(ok)toast('공유받은 코스를 불러왔어요');
+  return ok;
+}
+/* 붙여넣은 링크(또는 코드)에서 코스를 읽는다 */
+async function loadFromLink(text){
+  const t=(text||'').trim();
+  if(!t){toast('공유 링크를 붙여넣어 주세요');return}
+  let code=null;
+  try{code=new URL(t).searchParams.get('c')}catch(e){
+    const m=t.match(/[?&]c=([^&\s]+)/);code=m?m[1]:t;
+  }
+  if(!code){toast('링크에서 코스 정보를 찾지 못했어요');return}
+  let d;try{d=JSON.parse(b64d(code))}catch(e){toast('링크를 읽지 못했어요');return}
+  const ok=await applyPayload(d);
+  if(ok){closeSettings();toast('링크의 코스를 불러왔어요')}
+  else toast('링크에 코스 정보가 없어요');
+}
+
+/* ---------- 코스 기록 ---------- */
+let courseLog=store.get('walk.history',[]);
+function saveToHistory(){
+  const payload=coursePayload();
+  if(!payload){toast('저장할 코스가 없어요');return}
+  const r=routes[selected];
+  const dist=(r.realDistanceM?r.realDistanceM/1000:r.km).toFixed(1);
+  const time=fmtMin((r.realDurationMin??r.walkTotal)+r.stayTotal);
+  const title=(cfg.diffEnd&&endPoint)?`${start.name} → ${endPoint.name}`:`${start.name} 순환`;
+  courseLog.unshift({id:Date.now(),title,meta:`${dist}km · ${time} · 스팟 ${r.stops.length}곳`,
+    savedAt:new Date().toISOString().slice(0,10),payload});
+  courseLog=courseLog.slice(0,30);
+  store.set('walk.history',courseLog);
+  renderHistory();
+  pointAtSettings();
+}
+function renderHistory(){
+  const ul=document.getElementById('historyList');
+  if(!ul)return;
+  if(!courseLog.length){
+    ul.innerHTML=`<li style="border:0"><span class="emptyline">저장된 코스가 없어요. 코스를 뽑은 뒤 저장 → 기록에 저장을 눌러 보세요.</span></li>`;
+    return;
+  }
+  ul.innerHTML=courseLog.map((h,i)=>`<li>
+    <span class="pname">${esc(h.title)}<span class="histmeta">${esc(h.meta)} · ${esc(h.savedAt)}</span></span>
+    <button class="mini" data-hload="${i}">불러오기</button>
+    <button class="mini danger" data-hdel="${i}" title="삭제"><i class="fa-solid fa-trash"></i></button>
+  </li>`).join('');
+  ul.querySelectorAll('[data-hload]').forEach(b=>b.addEventListener('click',async()=>{
+    const ok=await applyPayload(courseLog[+b.dataset.hload].payload);
+    if(ok){closeSettings();toast('기록에서 코스를 불러왔어요')}}));
+  ul.querySelectorAll('[data-hdel]').forEach(b=>b.addEventListener('click',()=>{
+    courseLog.splice(+b.dataset.hdel,1);store.set('walk.history',courseLog);renderHistory()}));
+}
+/* 저장 직후 설정 버튼을 잠깐 가리켜 어디서 꺼내는지 알려 준다 */
+function pointAtSettings(){
+  const btn=isMobile()?document.getElementById('settingsBtnM'):document.getElementById('settingsBtn');
+  const target=btn&&btn.offsetParent!==null?btn:document.getElementById('settingsBtnM');
+  if(!target)return;
+  target.classList.add('pointing');
+  const hint=document.createElement('div');
+  hint.className='pointer-hint';
+  hint.textContent='기록에 저장했어요. 설정에서 다시 불러올 수 있어요.';
+  document.body.appendChild(hint);
+  const r=target.getBoundingClientRect();
+  hint.style.top=(r.bottom+10)+'px';
+  const w=Math.min(250,window.innerWidth-24);
+  hint.style.left=Math.max(12,Math.min(window.innerWidth-w-12,r.right-w))+'px';
+  setTimeout(()=>{target.classList.remove('pointing');hint.remove()},3600);
+}
+
+/* 저장 버튼과 그 메뉴 동작을 한 곳에서 연결한다.
+   모바일은 지표 박스의 overflow:hidden에 갇히지 않도록 화면 전체 팝업을 쓰고,
+   데스크톱은 결과 카드 옆에 작은 드롭다운을 그대로 쓴다. */
+function bindCourseActions(root,stop){
+  const fire=(fn)=>e=>{if(stop)e.stopPropagation();closeSaveMenus();fn()};
+  root.querySelectorAll('[data-save]').forEach(b=>b.addEventListener('click',e=>{
+    if(stop)e.stopPropagation();
+    if(isMobile()){openSavePopup();return}
+    const menu=b.parentElement.querySelector('[data-savemenu]');
+    const willOpen=menu.hidden;closeSaveMenus();menu.hidden=!willOpen;
+  }));
+  root.querySelectorAll('[data-dl]').forEach(b=>b.addEventListener('click',fire(downloadImage)));
+  root.querySelectorAll('[data-hist]').forEach(b=>b.addEventListener('click',fire(saveToHistory)));
+  root.querySelectorAll('[data-share]').forEach(b=>b.addEventListener('click',fire(shareCourse)));
+}
+function closeSaveMenus(){document.querySelectorAll('[data-savemenu]').forEach(m=>m.hidden=true)}
+document.addEventListener('pointerdown',e=>{
+  if(!e.target.closest('.savewrap'))closeSaveMenus();
+},true);
+
+const savePopup=document.getElementById('savePopup');
+function openSavePopup(){savePopup.classList.add('show')}
+function closeSavePopup(){savePopup.classList.remove('show')}
+savePopup.addEventListener('click',e=>{if(e.target===savePopup)closeSavePopup()});
+document.getElementById('popCancel').addEventListener('click',closeSavePopup);
+document.getElementById('popDl').addEventListener('click',()=>{closeSavePopup();downloadImage()});
+document.getElementById('popHist').addEventListener('click',()=>{closeSavePopup();saveToHistory()});
 
 /* ============================================================
    렌더링
@@ -2010,8 +2237,7 @@ function renderResults(){
   el.querySelectorAll('[data-photo]').forEach(i=>i.addEventListener('change',()=>addPhoto(i.dataset.photo,i.files)));
   el.querySelectorAll('[data-memo]').forEach(t=>t.addEventListener('input',()=>{
     notes[t.dataset.memo]=notes[t.dataset.memo]||{memo:'',photos:[]};notes[t.dataset.memo].memo=t.value}));
-  el.querySelectorAll('[data-dl]').forEach(b=>b.addEventListener('click',downloadImage));
-  el.querySelectorAll('[data-share]').forEach(b=>b.addEventListener('click',shareCourse));
+  bindCourseActions(el,false);
   const ai=document.getElementById('addSpotInline');
   if(ai)ai.addEventListener('click',()=>{
     addMode=true;pickMode=false;
